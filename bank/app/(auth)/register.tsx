@@ -1,25 +1,33 @@
-import { StyleSheet, Text, View, ScrollView, Button, TextInput, TouchableOpacity, Image } from 'react-native'
+import { StyleSheet, Text, View, ScrollView, Button, TextInput, TouchableOpacity, Image, Alert } from 'react-native'
 import React, { useState } from 'react'
 import UserInfo from '../../types/userInfo';
 import { useMutation } from '@tanstack/react-query';
 import { register } from '../../api/auth';
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
 
 const Register = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [image, setImage] = useState('');
+  const router = useRouter();
 
-
-  const { mutate: registerMutation } = useMutation({
+  const { mutate: registerMutation, isPending } = useMutation({
     mutationKey: ['register'],
     mutationFn: (userInfo: UserInfo) => register(userInfo),
-
+    onSuccess: () => {
+      router.replace("/(auth)/login");
+    },
+    onError: (error: any) => {
+      Alert.alert("Registration Failed");
+    },
   });
 
   const handleRegister = () => {
     if (password && username && image) {
       registerMutation({ username, password, image });
+    } else {
+      Alert.alert("Please fill all fields");
     }
   }
 
@@ -46,11 +54,16 @@ const Register = () => {
         placeholder="Username"
         value={username}
         onChangeText={setUsername}
+        autoCapitalize="none"
+        
       />
       <TextInput
         placeholder="Password"
         value={password}
         onChangeText={setPassword}
+        secureTextEntry
+        autoCapitalize="none"
+       
       />
 
       <TouchableOpacity style={{ marginTop: 20 }} onPress={pickImage}>
@@ -66,7 +79,7 @@ const Register = () => {
             )}
       </TouchableOpacity>
 
-      <Button title="Register" onPress={handleRegister} />
+      <Button title={isPending ? "Registering..." : "Register"} onPress={handleRegister} disabled={isPending} />
     </ScrollView>
   )
 }
