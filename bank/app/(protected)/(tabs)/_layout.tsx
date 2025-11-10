@@ -8,6 +8,7 @@ const _layout = () => {
         <Tabs.Screen name="index" options={{ headerShown: false }} />
         <Tabs.Screen name="(home)/index" options={{ headerShown: false }} />
         <Tabs.Screen name="(profile)/index" options={{ headerShown: false }} />
+        
     </Tabs>
   )
 }
@@ -15,5 +16,5 @@ const _layout = () => {
 export default _layout
 
 const styles = StyleSheet.create({
-    
+
 })

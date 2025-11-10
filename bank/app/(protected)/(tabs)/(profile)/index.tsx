@@ -5,7 +5,7 @@ const index = () => {
   return (
     <ScrollView>
       <View style={styles.Header}>
-       <Image source={require('../../assets/icon.png')} style={styles.image}></Image>
+       <Image source={require('../../../../assets/icon.png')} style={styles.image}></Image>
        <Text style={styles.username}>John Doe</Text>
     </View>
     <View style={styles.body}>
