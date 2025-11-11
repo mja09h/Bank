@@ -1,65 +1,142 @@
-import { ScrollView, StyleSheet, Text, View, Image } from 'react-native'
-import React from 'react'
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  Image,
+  Button,
+} from "react-native";
+import React, { useContext } from "react";
+import { Redirect, router } from "expo-router";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { getUser } from "../../../../api/auth";
+import { removeToken } from "../../../../api/storage";
+import AuthContext from "../../../../context/authContext";
 
 const index = () => {
+  const { setIsAuthenticated } = useContext(AuthContext);
+  const { data: user } = useQuery({
+    queryKey: ["user"],
+    queryFn: () => getUser(),
+  });
+  console.log(user);
+
+  const { mutate: logout } = useMutation({
+    mutationKey: ["logout"],
+    mutationFn: async () => {
+        await removeToken(); 
+        setIsAuthenticated(false); 
+        router.replace("/(auth)/login");
+    },
+    onSuccess: () => {
+      console.log("Logged out");
+    },
+    onError: (error) => {
+      console.log(error);
+    },
+  });
+  const getImageSource = () => {
+    if (!user?.image) {
+      return require('../../../../assets/icon.png');
+    }
+    
+    // If image is a string and it's not '[object Object]', use it as URI
+    if (typeof user.image === 'string' && user.image !== '[object Object]') {
+      // Check if it's a full URL or needs base URL
+      if (user.image.startsWith('http://') || user.image.startsWith('https://')) {
+        return { uri: user.image };
+      }
+      // If it's a relative path, construct full URL
+      return { uri: `https://react-bank-project.eapi.joincoded.com/mini-project/api${user.image}` };
+    }
+    
+    // If image is an object, try to extract URL
+    if (typeof user.image === 'object' && user.image !== null) {
+      const imageUrl = user.image.url || user.image.uri || user.image.path;
+      if (imageUrl) {
+        if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+          return { uri: imageUrl };
+        }
+        return { uri: `https://react-bank-project.eapi.joincoded.com/mini-project/api${imageUrl}` };
+      }
+    }
+    
+    // Fallback to default image
+    return require('../../../../assets/icon.png');
+  };
+
   return (
     <ScrollView>
       <View style={styles.Header}>
-       <Image source={require('../../../../assets/icon.png')} style={styles.image}></Image>
-       <Text style={styles.username}>John Doe</Text>
-    </View>
-    <View style={styles.body}>
-        <Text style={styles.text}>Username: John Doe</Text>
-    </View>
-    <View style={styles.footer}>
-        
-    </View>
+        <Image
+          source={getImageSource()}
+          style={styles.image}
+        ></Image>
+      </View>
+      <View style={styles.body}>
+        <Text style={styles.username}>Username: {user?.username}</Text>
+        <Text style={styles.balance}>Balance: {user?.balance} KD</Text>
+      </View>
+      <View style={styles.footer}>
+        <Button
+          title="Edit Profile"
+          onPress={() => router.push("/(protected)/(tabs)/(profile)/edit")}
+        />
+        <Button title="Logout" onPress={() => logout()} />
+      </View>
     </ScrollView>
-  )
-}
+  );
+};
 
-export default index
+export default index;
 
 const styles = StyleSheet.create({
-    title: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginTop: 20,
-    },
-    Header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 20,
-    },
-    image: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
-    },      
-    username: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginTop: 20,
-    },
-    body: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 20,
-    },
-    text: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        textAlign: 'center',
-        marginTop: 20,
-    },
-    footer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginTop: 20,
-    },
-})
+  title: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 20,
+  },
+  Header: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  image: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+  },
+  username: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 20,
+  },
+  body: {
+    flex: 1,
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  text: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 20,
+  },
+  footer: {
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 20,
+  },
+  balance: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 20,
+  },
+});

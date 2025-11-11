@@ -1,12 +1,18 @@
 import { StyleSheet, Text, View, ScrollView, Button, TextInput, TouchableOpacity, Image, Alert } from 'react-native'
-import React, { useState } from 'react'
+import React, { useContext, useState } from 'react'
 import UserInfo from '../../types/userInfo';
 import { useMutation } from '@tanstack/react-query';
 import { register } from '../../api/auth';
 import * as ImagePicker from 'expo-image-picker';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
+import AuthContext from '../../context/authContext';
+import { storeToken } from '../../api/storage';
 
 const Register = () => {
+  const { isAuthenticated, setIsAuthenticated } = useContext(AuthContext);
+  if (isAuthenticated) {
+    return <Redirect href="/(protected)/(tabs)/(home)" />
+  }
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [image, setImage] = useState('');
@@ -15,8 +21,10 @@ const Register = () => {
   const { mutate: registerMutation, isPending } = useMutation({
     mutationKey: ['register'],
     mutationFn: (userInfo: UserInfo) => register(userInfo),
-    onSuccess: () => {
-      router.replace("/(auth)/login");
+    onSuccess: async (data) => {
+      await storeToken(data.token);
+      setIsAuthenticated(true);
+      router.replace("/(protected)/(tabs)/(home)");
     },
     onError: (error: any) => {
       Alert.alert("Registration Failed");
@@ -80,6 +88,10 @@ const Register = () => {
       </TouchableOpacity>
 
       <Button title={isPending ? "Registering..." : "Register"} onPress={handleRegister} disabled={isPending} />
+
+      <TouchableOpacity onPress={() => router.push("/(auth)/login")} style={styles.loginButton}>
+        <Text style={styles.loginText}>Do have a account? Login here</Text>
+      </TouchableOpacity>
     </ScrollView>
   )
 }
@@ -115,5 +127,13 @@ const styles = StyleSheet.create({
       fontWeight: 'bold',
       textAlign: 'center',
     },
-
+    loginButton: {
+      marginTop: 20,
+      alignItems: 'center',
+    },
+    loginText: {
+      color: 'blue',
+      fontSize: 16,
+      textDecorationLine: 'underline',
+    },
   })

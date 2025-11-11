@@ -6,15 +6,22 @@ import {
   Button,
   TextInput,
   Alert,
+  TouchableOpacity,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { login as loginUser } from "../../api/auth";
 import UserInfo from "../../types/userInfo";
 import { storeToken } from "../../api/storage";
-import { useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
+import AuthContext from "../../context/authContext";
 
 const login = () => {
+  const { isAuthenticated, setIsAuthenticated } = useContext(AuthContext);
+  if (isAuthenticated) {
+    return <Redirect href="/(protected)/(tabs)/(home)" />
+  }
+  
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
@@ -24,6 +31,7 @@ const login = () => {
     mutationFn: (userInfo: UserInfo) => loginUser(userInfo),
     onSuccess: async (data) => {
       await storeToken(data.token);
+      setIsAuthenticated(true);
       router.replace("/(protected)/(tabs)/(home)");
     },
     onError: (error: any) => {
@@ -62,6 +70,9 @@ const login = () => {
         onPress={handleLogin}
         disabled={isPending}
       />
+      <TouchableOpacity onPress={() => router.push("/(auth)/register")} style={styles.registerButton}>
+        <Text style={styles.registerText}>Do not have a account? Register here</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 };
@@ -87,5 +98,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 5,
     fontSize: 16,
+  },
+  registerButton: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  registerText: {
+    color: 'blue',
+    fontSize: 16,
+    textDecorationLine: 'underline',
   },
 });

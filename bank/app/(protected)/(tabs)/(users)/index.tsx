@@ -15,12 +15,12 @@ const index = () => {
         <Text style={styles.title}>Users</Text>
       </View>
       <View style={styles.body}>
-        
+
         {users?.map((user: any) => (
-            <View style={styles.user}>
+            <View style={styles.user} key={user.id}>
                 <Image source={require('../../../../assets/icon.png')} style={styles.image}></Image>
                 <Text style={styles.username}>{user.username}</Text>
-                <Text style={styles.balance}>${user.balance}</Text>
+                <Text style={styles.balance}>{user.balance} KD</Text>
             </View>
         ))}
 
