@@ -13,4 +13,28 @@ api.interceptors.request.use(async (request) => {
     return request;
 });
 
+// Response interceptor - logs incoming responses
+api.interceptors.response.use(
+    (response) => {
+        console.log('✅ RESPONSE:', {
+            status: response.status,
+            statusText: response.statusText,
+            url: response.config.url,
+            data: response.data,
+            headers: response.headers,
+        });
+        return response;
+    },
+    (error) => {
+        console.log('❌ RESPONSE ERROR:', {
+            message: error.message,
+            status: error.response?.status,
+            statusText: error.response?.statusText,
+            url: error.config?.url,
+            data: error.response?.data,
+        });
+        return Promise.reject(error);
+    }
+);
+
 export default api;

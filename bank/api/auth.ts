@@ -8,23 +8,29 @@ const login = async (userInfo: UserInfo) => {
   return data;
 };
 const register = async (userInfo: UserInfo) => {
-  const formData = new FormData();
+  try {
+    const formData = new FormData();
+    console.log(userInfo);
+    formData.append("username", userInfo.username);
+    formData.append("password", userInfo.password);
+    formData.append("image", {
+      uri: userInfo.image,
+      name: userInfo.image,
+      type: "image/jpeg",
+    } as any);
 
-  formData.append("username", userInfo.username);
-  formData.append("password", userInfo.password);
-  formData.append("image", {
-    uri: userInfo.image,
-    name: userInfo.image,
-    type: "image/jpeg",
-  } as any);
-  const response = await api.post("/auth/register", formData);
-  await storeToken(response.data.token);
-  return response.data;
+    const response = await api.post("/auth/register", formData);
+    await storeToken(response.data.token);
+    return response.data;
+  }
+  catch (error) {
+    console.log(error);
+  }
 };
 
 const getAllUsers = async () => {
-    const { data } = await api.get("/auth/users");
-    return data;
+  const { data } = await api.get("/auth/users");
+  return data;
 };
 
 const getUser = async () => {
