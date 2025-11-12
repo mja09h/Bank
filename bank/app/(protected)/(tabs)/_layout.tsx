@@ -14,6 +14,7 @@ const _layout = () => {
     <Tabs screenOptions={{ headerShown: false }}>
         <Tabs.Screen name="index" options={{ headerShown: false }} />
         <Tabs.Screen name="(home)/index" options={{ headerShown: false }} />
+        <Tabs.Screen name="(transactions)/index" options={{ headerShown: false }} />
         <Tabs.Screen name="(profile)/index" options={{ headerShown: false }} />
         
     </Tabs>
