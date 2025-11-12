@@ -84,7 +84,11 @@ const index = () => {
               key={user.id || user._id || index}
             >
               <Image
-                source={require("../../../../assets/icon.png")}
+                source={{
+                  uri:
+                    "https://react-bank-project.eapi.joincoded.com/" +
+                    user?.image,
+                }}
                 style={styles.image}
               ></Image>
               <View style={styles.userInfo}>
@@ -100,7 +104,6 @@ const index = () => {
 };
 
 export default index;
-
 const styles = StyleSheet.create({
   Header: {
     flexDirection: "column",
