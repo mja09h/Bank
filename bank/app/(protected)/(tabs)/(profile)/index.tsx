@@ -19,7 +19,7 @@ const index = () => {
     queryKey: ["user"],
     queryFn: () => getUser(),
   });
-  console.log(user);
+  
 
   const { mutate: logout } = useMutation({
     mutationKey: ["logout"],
@@ -35,48 +35,17 @@ const index = () => {
       console.log(error);
     },
   });
-  
-  const getImageSource = () => {
-    if (!user?.image) {
-      return require("../../../../assets/icon.png");
-    }
 
-    // If image is a string and it's not '[object Object]', use it as URI
-    if (typeof user.image === "string" && user.image !== "[object Object]") {
-      // Check if it's a full URL or needs base URL
-      if (
-        user.image.startsWith("http://") ||
-        user.image.startsWith("https://")
-      ) {
-        return { uri: user.image };
-      }
-      // If it's a relative path, construct full URL
-      return {
-        uri: `https://react-bank-project.eapi.joincoded.com/mini-project/${user.image}`,
-      };
-    }
-
-    // If image is an object, try to extract URL
-    if (typeof user.image === "object" && user.image !== null) {
-      const imageUrl = user.image.url || user.image.uri || user.image.path;
-      if (imageUrl) {
-        if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-          return { uri: imageUrl };
-        }
-        return {
-          uri: `https://react-bank-project.eapi.joincoded.com/mini-project/${imageUrl}`,
-        };
-      }
-    }
-
-    // Fallback to default image
-    return require("../../../../assets/icon.png");
-  };
 
   return (
     <ScrollView>
       <View style={styles.Header}>
-        <Image source={getImageSource()} style={styles.image}></Image>
+        <Image
+          source={{
+            uri: "https://react-bank-project.eapi.joincoded.com/" + user?.image,
+          }}
+          style={styles.image}
+        ></Image>
       </View>
       <View style={styles.body}>
         <Text style={styles.username}>Username: {user?.username}</Text>

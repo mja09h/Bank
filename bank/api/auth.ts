@@ -43,4 +43,25 @@ const getUser = async () => {
   return data;
 };
 
-export { register, login, getAllUsers, getUser };
+const updateProfile = async (imageUri: string) => {
+  try {
+    const formData = new FormData();
+    formData.append("image", {
+      uri: imageUri,
+      name: "image.jpg",
+      type: "image/jpeg",
+    } as any);
+
+    const response = await api.put("/auth/profile", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.log(error);
+    throw error;
+  }
+};
+
+export { register, login, getAllUsers, getUser, updateProfile };

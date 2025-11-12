@@ -42,15 +42,6 @@ const Register = () => {
     },
   });
 
-  const handleRegister = () => {
-    if (password && username && image) {
-      console.log("userInfo in handleRegister", { username, password, image });
-      registerMutation({ username, password, image });
-    } else {
-      Alert.alert("Please fill all fields");
-    }
-  };
-
   const pickImage = async () => {
     // No permissions request is necessary for launching the image library
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -60,10 +51,19 @@ const Register = () => {
       quality: 1,
     });
 
-    console.log(result);
+    console.log("result in pickImage", result);
 
     if (!result.canceled) {
       setImage(result.assets[0].uri);
+    }
+  };
+
+  const handleRegister = () => {
+    if (password && username && image) {
+      console.log("userInfo in handleRegister", { username, password, image });
+      registerMutation({ username, password, image });
+    } else {
+      Alert.alert("Please fill all fields");
     }
   };
 
