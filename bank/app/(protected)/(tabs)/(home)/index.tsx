@@ -8,19 +8,103 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
+  Animated,
+  Dimensions,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { deposit, withdraw, transfer } from "../../../../api/transactions";
+import { deposit, withdraw } from "../../../../api/transactions";
 import { getUser } from "../../../../api/auth";
+import { MaterialIcons } from "@expo/vector-icons";
+import { useRouter, router } from "expo-router";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+/**
+ * Home Screen Component
+ * Displays user balance and transaction options (Deposit, Withdraw, Transfer)
+ * Styled with Orbit theme - dark space aesthetic matching the logo
+ */
 
 const index = () => {
+  const router = useRouter();
   const [depositModalVisible, setDepositModalVisible] = useState(false);
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
-  const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [amount, setAmount] = useState("");
-  const [username, setUsername] = useState("");
   const [error, setError] = useState("");
+
+  // Generate star positions (memoized to prevent regeneration)
+  const stars = useRef(
+    Array.from({ length: 20 }, (_, i) => ({
+      id: i,
+      x: Math.random() * SCREEN_WIDTH,
+      y: Math.random() * SCREEN_HEIGHT,
+      size: 2 + Math.random() * 3,
+      duration: 1000 + Math.random() * 2000,
+    }))
+  ).current;
+
+  // Generate moon positions (memoized)
+  const moons = useRef([
+    { x: SCREEN_WIDTH * 0.1, y: SCREEN_HEIGHT * 0.15, size: 40 },
+    { x: SCREEN_WIDTH * 0.85, y: SCREEN_HEIGHT * 0.25, size: 30 },
+    { x: SCREEN_WIDTH * 0.5, y: SCREEN_HEIGHT * 0.1, size: 25 },
+  ]).current;
+
+  // Animation values for stars and moons
+  const starAnimations = useRef(
+    stars.map(() => new Animated.Value(Math.random()))
+  ).current;
+  const moonAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+
+  // Animate stars twinkling
+  useEffect(() => {
+    const starAnimationsArray = starAnimations.map((anim, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: stars[index].duration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: stars[index].duration,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+
+    Animated.parallel(starAnimationsArray).start();
+  }, []);
+
+  // Animate moons floating
+  useEffect(() => {
+    const moonAnimationsArray = moonAnimations.map((anim, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+
+    Animated.parallel(moonAnimationsArray).start();
+  }, []);
 
   const { data: user, refetch: refetchUser } = useQuery({
     queryKey: ["user"],
@@ -64,32 +148,6 @@ const index = () => {
       },
     });
 
-  const { mutate: transferMutation, isPending: isTransferPending } =
-    useMutation({
-      mutationKey: ["transfer"],
-      mutationFn: ({
-        amount,
-        username,
-      }: {
-        amount: number;
-        username: string;
-      }) => transfer(amount, username),
-      onSuccess: () => {
-        setTransferModalVisible(false);
-        setAmount("");
-        setUsername("");
-        setError("");
-        refetchUser();
-        Alert.alert("Success", "Funds transferred successfully!");
-      },
-      onError: (error: any) => {
-        Alert.alert(
-          "Transfer Failed",
-          error.response?.data?.message || "Failed to transfer funds"
-        );
-      },
-    });
-
   const validateAmount = (isWithdraw: boolean = false): boolean => {
     if (!amount || amount.trim() === "") {
       setError("Amount is required");
@@ -118,39 +176,6 @@ const index = () => {
     return true;
   };
 
-  const validateTransfer = (): boolean => {
-    if (!username || username.trim() === "") {
-      setError("Username is required");
-      return false;
-    }
-
-    if (!amount || amount.trim() === "") {
-      setError("Amount is required");
-      return false;
-    }
-
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount)) {
-      setError("Please enter a valid number");
-      return false;
-    }
-
-    if (numAmount <= 0) {
-      setError("Amount must be greater than 0");
-      return false;
-    }
-
-    if (user?.balance !== undefined) {
-      if (numAmount > user.balance) {
-        setError("Insufficient balance");
-        return false;
-      }
-    }
-
-    setError("");
-    return true;
-  };
-
   const handleDeposit = () => {
     if (validateAmount(false)) {
       depositMutation(parseFloat(amount));
@@ -160,15 +185,6 @@ const index = () => {
   const handleWithdraw = () => {
     if (validateAmount(true)) {
       withdrawMutation(parseFloat(amount));
-    }
-  };
-
-  const handleTransfer = () => {
-    if (validateTransfer()) {
-      transferMutation({
-        amount: parseFloat(amount),
-        username: username.trim(),
-      });
     }
   };
 
@@ -184,302 +200,559 @@ const index = () => {
     setError("");
   };
 
-  const handleCloseTransferModal = () => {
-    setTransferModalVisible(false);
-    setAmount("");
-    setUsername("");
-    setError("");
-  };
-
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.text}>Home</Text>
-        <Text style={styles.balance}>Balance: {user?.balance} KD</Text>
-        <TouchableOpacity
-          style={styles.depositButton}
-          onPress={() => setDepositModalVisible(true)}
-        >
-          <Text style={styles.depositButtonText}>Deposit Funds</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.withdrawButton}
-          onPress={() => setWithdrawModalVisible(true)}
-        >
-          <Text style={styles.withdrawButtonText}>Withdraw Funds</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.transferButton}
-          onPress={() => setTransferModalVisible(true)}
-        >
-          <Text style={styles.transferButtonText}>Transfer Funds</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      {/* Animated Background - Stars and Moons */}
+      <View style={styles.backgroundContainer} pointerEvents="none">
+        {/* Animated Stars */}
+        {stars.map((star, index) => {
+          const opacity = starAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.3, 1],
+          });
+          return (
+            <Animated.View
+              key={star.id}
+              style={[
+                styles.star,
+                {
+                  left: star.x,
+                  top: star.y,
+                  width: star.size,
+                  height: star.size,
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
+
+        {/* Animated Moons */}
+        {moons.map((moon, index) => {
+          const translateY = moonAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 20],
+          });
+          const opacity = moonAnimations[index].interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.4, 0.7, 0.4],
+          });
+          return (
+            <Animated.View
+              key={index}
+              style={[
+                styles.moon,
+                {
+                  left: moon.x,
+                  top: moon.y,
+                  width: moon.size,
+                  height: moon.size,
+                  borderRadius: moon.size / 2,
+                  transform: [{ translateY }],
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
       </View>
 
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={depositModalVisible}
-        onRequestClose={handleCloseDepositModal}
+      {/* Main Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Deposit Funds</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Enter amount"
-              value={amount}
-              onChangeText={(text) => {
-                setAmount(text);
-                setError("");
-              }}
-              keyboardType="numeric"
-              editable={!isDepositPending}
+        {/* Header Section with Orbit Logo */}
+        <View style={styles.header}>
+          <View style={styles.logoContainer}>
+            <Image
+              source={require("../../../../assets/orbit-logo-23.png")}
+              style={styles.logo}
+              resizeMode="contain"
             />
+          </View>
+          <Text style={styles.welcomeText}>Welcome Back</Text>
+        </View>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {/* Balance Card - Dark themed card displaying user balance */}
+        <View style={styles.balanceCard}>
+          <Text style={styles.balanceLabel}>Your Balance</Text>
+          <Text style={styles.balanceAmount}>{user?.balance || 0} KD</Text>
+          <View style={styles.balanceUnderline} />
+        </View>
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={handleCloseDepositModal}
-                disabled={isDepositPending}
+        {/* Action Buttons Container - Stacked vertically with 360-degree style */}
+        <View style={styles.actionsContainer}>
+          {/* Deposit Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.depositButton]}
+            onPress={() => setDepositModalVisible(true)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.buttonContent}>
+              <View
+                style={[styles.circularIconContainer, styles.depositIconBg]}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
+                <MaterialIcons
+                  name="account-balance-wallet"
+                  size={32}
+                  color="#34C759"
+                />
+              </View>
+              <View style={styles.buttonTextContainer}>
+                <Text style={styles.actionButtonText}>Deposit</Text>
+                <Text style={styles.actionButtonSubtext}>
+                  Add funds to your account
+                </Text>
+              </View>
+              <View style={styles.arrowContainer}>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.depositButtonModal,
-                  isDepositPending && styles.buttonDisabled,
-                ]}
-                onPress={handleDeposit}
-                disabled={isDepositPending}
+          {/* Withdraw Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.withdrawButton]}
+            onPress={() => setWithdrawModalVisible(true)}
+            activeOpacity={0.9}
+          >
+            <View style={styles.buttonContent}>
+              <View
+                style={[styles.circularIconContainer, styles.withdrawIconBg]}
               >
-                {isDepositPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Deposit</Text>
-                )}
-              </TouchableOpacity>
+                <MaterialIcons
+                  name="account-balance"
+                  size={32}
+                  color="#FF3B30"
+                />
+              </View>
+              <View style={styles.buttonTextContainer}>
+                <Text style={styles.actionButtonText}>Withdraw</Text>
+                <Text style={styles.actionButtonSubtext}>
+                  Take money from your account
+                </Text>
+              </View>
+              <View style={styles.arrowContainer}>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Transfer Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.transferButton]}
+            onPress={() => {
+              console.log("Transfer button clicked");
+              router.push("/(protected)/(tabs)/(home)/transfer");
+            }}
+            activeOpacity={0.9}
+          >
+            <View style={styles.buttonContent}>
+              <View
+                style={[styles.circularIconContainer, styles.transferIconBg]}
+              >
+                <MaterialIcons name="send" size={32} color="#007AFF" />
+              </View>
+              <View style={styles.buttonTextContainer}>
+                <Text style={styles.actionButtonText}>Transfer</Text>
+                <Text style={styles.actionButtonSubtext}>
+                  Send money to another user
+                </Text>
+              </View>
+              <View style={styles.arrowContainer}>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Deposit Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={depositModalVisible}
+          onRequestClose={handleCloseDepositModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Deposit Funds</Text>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Enter amount"
+                placeholderTextColor="#8E8E93"
+                value={amount}
+                onChangeText={(text) => {
+                  setAmount(text);
+                  setError("");
+                }}
+                keyboardType="numeric"
+                editable={!isDepositPending}
+              />
+
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={handleCloseDepositModal}
+                  disabled={isDepositPending}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.depositButtonModal,
+                    isDepositPending && styles.buttonDisabled,
+                  ]}
+                  onPress={handleDeposit}
+                  disabled={isDepositPending}
+                >
+                  {isDepositPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Deposit</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={withdrawModalVisible}
-        onRequestClose={handleCloseWithdrawModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Withdraw Funds</Text>
+        {/* Withdraw Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={withdrawModalVisible}
+          onRequestClose={handleCloseWithdrawModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Withdraw Funds</Text>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Enter amount"
-              value={amount}
-              onChangeText={(text) => {
-                setAmount(text);
-                setError("");
-              }}
-              keyboardType="numeric"
-              editable={!isWithdrawPending}
-            />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter amount"
+                placeholderTextColor="#8E8E93"
+                value={amount}
+                onChangeText={(text) => {
+                  setAmount(text);
+                  setError("");
+                }}
+                keyboardType="numeric"
+                editable={!isWithdrawPending}
+              />
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+              {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={handleCloseWithdrawModal}
-                disabled={isWithdrawPending}
-              >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={handleCloseWithdrawModal}
+                  disabled={isWithdrawPending}
+                >
+                  <Text style={styles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.withdrawButtonModal,
-                  isWithdrawPending && styles.buttonDisabled,
-                ]}
-                onPress={handleWithdraw}
-                disabled={isWithdrawPending}
-              >
-                {isWithdrawPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Withdraw</Text>
-                )}
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.button,
+                    styles.withdrawButtonModal,
+                    isWithdrawPending && styles.buttonDisabled,
+                  ]}
+                  onPress={handleWithdraw}
+                  disabled={isWithdrawPending}
+                >
+                  {isWithdrawPending ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Withdraw</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      <Modal
-        animationType="slide"
-        transparent={true}
-        visible={transferModalVisible}
-        onRequestClose={handleCloseTransferModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Transfer Funds</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Enter username"
-              value={username}
-              onChangeText={(text) => {
-                setUsername(text);
-                setError("");
-              }}
-              editable={!isTransferPending}
-              autoCapitalize="none"
-            />
-
-            <TextInput
-              style={styles.input}
-              placeholder="Enter amount"
-              value={amount}
-              onChangeText={(text) => {
-                setAmount(text);
-                setError("");
-              }}
-              keyboardType="numeric"
-              editable={!isTransferPending}
-            />
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={handleCloseTransferModal}
-                disabled={isTransferPending}
-              >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.transferButtonModal,
-                  isTransferPending && styles.buttonDisabled,
-                ]}
-                onPress={handleTransfer}
-                disabled={isTransferPending}
-              >
-                {isTransferPending ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.buttonText}>Transfer</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-    </ScrollView>
+        </Modal>
+      </ScrollView>
+    </View>
   );
 };
 
 export default index;
 
 const styles = StyleSheet.create({
+  // Main container with dark space theme background
   container: {
     flex: 1,
+    backgroundColor: "#0A0E27", // Deep space dark blue
   },
-  content: {
+  // Background container for animated elements
+  backgroundContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  // Scroll view for content
+  scrollView: {
     flex: 1,
-    padding: 20,
-    alignItems: "center",
-    justifyContent: "center",
+    zIndex: 1,
   },
-  text: {
-    fontSize: 20,
+  scrollContent: {
+    paddingBottom: 30,
+  },
+  // Animated star style
+  star: {
+    position: "absolute",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 50,
+    shadowColor: "#FFFFFF",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 1,
+    shadowRadius: 3,
+  },
+  // Animated moon style
+  moon: {
+    position: "absolute",
+    backgroundColor: "#F5F5DC", // Moon color
+    shadowColor: "#F5F5DC",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+  // Header section with logo
+  header: {
+    alignItems: "center",
+    paddingTop: 40,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+  },
+  logoContainer: {
+    width: 120,
+    height: 120,
+    marginBottom: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  logo: {
+    width: "100%",
+    height: "100%",
+  },
+  welcomeText: {
+    fontSize: 28,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+  },
+  // Balance card - dark themed card with shadow
+  balanceCard: {
+    backgroundColor: "#1A1F3A", // Dark card background
+    marginHorizontal: 20,
+    marginBottom: 30,
+    padding: 30,
+    borderRadius: 20,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#2A2F4A", // Subtle border
+  },
+  balanceLabel: {
+    fontSize: 14,
+    color: "#8E8E93", // Gray text
+    fontWeight: "600",
+    marginBottom: 10,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  balanceAmount: {
+    fontSize: 42,
     fontWeight: "bold",
+    color: "#FFFFFF",
+    marginBottom: 15,
+    letterSpacing: 1,
+  },
+  balanceUnderline: {
+    width: 60,
+    height: 3,
+    backgroundColor: "#007AFF", // Blue accent
+    borderRadius: 2,
+  },
+  // Action buttons container - stacked vertically
+  actionsContainer: {
+    flexDirection: "column",
+    paddingHorizontal: 20,
+    gap: 15,
     marginBottom: 20,
   },
-  balance: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 30,
-    color: "#007AFF",
+  // Base action button style - 360-degree circular design
+  actionButton: {
+    width: "100%",
+    backgroundColor: "#1A1F3A", // Dark card background
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 2,
+    borderColor: "#2A2F4A",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
+  // Button content layout
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  // Circular icon container - 360-degree style
+  circularIconContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35, // Perfect circle
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    marginRight: 15,
+  },
+  // Icon background colors with circular design
+  depositIconBg: {
+    borderColor: "#34C759",
+    backgroundColor: "rgba(52, 199, 89, 0.15)",
+    shadowColor: "#34C759",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  withdrawIconBg: {
+    borderColor: "#FF3B30",
+    backgroundColor: "rgba(255, 59, 48, 0.15)",
+    shadowColor: "#FF3B30",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  transferIconBg: {
+    borderColor: "#007AFF",
+    backgroundColor: "rgba(0, 122, 255, 0.15)",
+    shadowColor: "#007AFF",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  // Text container
+  buttonTextContainer: {
+    flex: 1,
+    flexDirection: "column",
+  },
+  actionButtonText: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  actionButtonSubtext: {
+    fontSize: 12,
+    color: "#8E8E93",
+    fontWeight: "500",
+  },
+  // Arrow container
+  arrowContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#0A0E27",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#2A2F4A",
+  },
+  // Color-coded button borders with 360-degree circular style
   depositButton: {
-    backgroundColor: "#007AFF",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  depositButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    borderColor: "#34C759", // Green for deposit
+    shadowColor: "#34C759",
   },
   withdrawButton: {
-    backgroundColor: "#FF3B30",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-    marginTop: 20,
-  },
-  withdrawButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    borderColor: "#FF3B30", // Red for withdraw
+    shadowColor: "#FF3B30",
   },
   transferButton: {
-    backgroundColor: "#34C759",
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 8,
-    marginTop: 20,
+    borderColor: "#007AFF", // Blue for transfer
+    shadowColor: "#007AFF",
   },
-  transferButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+  // Modal styles - dark theme
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    backgroundColor: "rgba(0, 0, 0, 0.8)", // Dark overlay
     justifyContent: "center",
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 20,
+    backgroundColor: "#1A1F3A", // Dark modal background
+    borderRadius: 20,
+    padding: 25,
     width: "85%",
     maxWidth: 400,
+    borderWidth: 1,
+    borderColor: "#2A2F4A",
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: "bold",
-    marginBottom: 20,
+    marginBottom: 25,
     textAlign: "center",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
+    borderColor: "#2A2F4A",
+    borderRadius: 12,
+    padding: 15,
     fontSize: 16,
     marginBottom: 10,
+    backgroundColor: "#0A0E27", // Dark input background
+    color: "#FFFFFF",
   },
   errorText: {
     color: "#FF3B30",
     fontSize: 14,
     marginBottom: 10,
+    textAlign: "center",
+    fontWeight: "600",
   },
   modalButtons: {
     flexDirection: "row",
