@@ -35,6 +35,7 @@ const index = () => {
       console.log(error);
     },
   });
+  
   const getImageSource = () => {
     if (!user?.image) {
       return require("../../../../assets/icon.png");

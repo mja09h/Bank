@@ -10,16 +10,21 @@ const login = async (userInfo: UserInfo) => {
 const register = async (userInfo: UserInfo) => {
   try {
     const formData = new FormData();
-    console.log(userInfo);
+    console.log("userInfo in register", userInfo);
     formData.append("username", userInfo.username);
     formData.append("password", userInfo.password);
     formData.append("image", {
       uri: userInfo.image,
-      name: userInfo.image,
+      name: "image.jpg",
       type: "image/jpeg",
     } as any);
 
-    const response = await api.post("/auth/register", formData);
+
+    const response = await api.post("/auth/register", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
     await storeToken(response.data.token);
     return response.data;
   }

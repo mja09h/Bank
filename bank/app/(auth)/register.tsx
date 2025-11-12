@@ -44,6 +44,7 @@ const Register = () => {
 
   const handleRegister = () => {
     if (password && username && image) {
+      console.log("userInfo in handleRegister", { username, password, image });
       registerMutation({ username, password, image });
     } else {
       Alert.alert("Please fill all fields");
