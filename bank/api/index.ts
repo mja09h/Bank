@@ -17,7 +17,7 @@ const getDepositCodesApiUrl = () => {
         return 'http://192.168.8.102:5000'; // Change this to your computer's IP if different
         // Alternative for Android emulator: 'http://10.0.2.2:5000'
     } else if (Platform.OS === 'ios') {
-        return 'http://localhost:5000'; // iOS simulator
+        return 'http://192.168.13.55:5000'; // iOS simulator
     } else {
         // Web or other platforms
         return 'http://localhost:5000';
