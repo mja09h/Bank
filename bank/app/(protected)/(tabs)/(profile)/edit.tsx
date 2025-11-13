@@ -16,6 +16,7 @@ import { getUser, updateProfile } from "../../../../api/auth";
 import * as ImagePicker from "expo-image-picker";
 import { MaterialIcons } from "@expo/vector-icons";
 import CustomAlert from "../../../../components/CustomAlert";
+import RocketLoader from "../../../../components/RocketLoader";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -182,14 +183,7 @@ const edit = () => {
       : null);
 
   if (userLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </View>
-    );
+    return <RocketLoader message="Loading..." size="large" />;
   }
 
   return (

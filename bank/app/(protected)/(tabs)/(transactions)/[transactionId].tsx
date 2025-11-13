@@ -16,6 +16,7 @@ import { getUserById } from "../../../../api/auth";
 import Transaction from "../../../../types/transaction";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Image } from "react-native";
+import RocketLoader from "../../../../components/RocketLoader";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -256,14 +257,7 @@ const TransactionDetail = () => {
   };
 
   if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading transaction...</Text>
-        </View>
-      </View>
-    );
+    return <RocketLoader message="Loading transaction..." size="large" />;
   }
 
   if (error) {

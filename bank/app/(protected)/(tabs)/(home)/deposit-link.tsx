@@ -17,6 +17,7 @@ import { getUser, getUserById } from "../../../../api/auth";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import CustomAlert from "../../../../components/CustomAlert";
+import RocketLoader from "../../../../components/RocketLoader";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -200,14 +201,7 @@ const DepositLink = () => {
   };
 
   if (targetUserLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </View>
-    );
+    return <RocketLoader message="Loading..." size="large" />;
   }
 
   if (!userId || !targetUser) {

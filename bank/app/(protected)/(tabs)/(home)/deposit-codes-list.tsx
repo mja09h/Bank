@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
+import RocketLoader from "../../../../components/RocketLoader";
 import React, { useState, useEffect, useRef } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -284,7 +285,7 @@ const DepositCodesList = () => {
         {/* Codes List */}
         {loading ? (
           <View style={styles.centerContainer}>
-            <Text style={styles.loadingText}>Loading...</Text>
+            <RocketLoader message="Loading codes..." size="large" />
           </View>
         ) : codes.length === 0 ? (
           <View style={styles.centerContainer}>

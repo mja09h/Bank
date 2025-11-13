@@ -15,6 +15,7 @@ import { getAllUsers, getUser } from "../../../../api/auth";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import CustomAlert from "../../../../components/CustomAlert";
+import RocketLoader from "../../../../components/RocketLoader";
 
 /**
  * Transfer Screen Component
@@ -291,8 +292,7 @@ const Transfer = () => {
             </Text>
             {isLoadingUsers ? (
               <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#007AFF" />
-                <Text style={styles.loadingText}>Loading users...</Text>
+                <RocketLoader message="Loading users..." size="large" />
               </View>
             ) : usersError ? (
               <View style={styles.centerContainer}>

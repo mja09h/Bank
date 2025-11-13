@@ -16,6 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../../../../api/auth";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import RocketLoader from "../../../../components/RocketLoader";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -162,14 +163,7 @@ const index = () => {
   const paginatedUsers = users.slice(startIndex, endIndex);
 
   if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading users...</Text>
-        </View>
-      </View>
-    );
+    return <RocketLoader message="Loading users..." size="large" />;
   }
 
   if (error) {

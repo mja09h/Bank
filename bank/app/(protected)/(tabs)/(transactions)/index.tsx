@@ -16,6 +16,7 @@ import { getAllUsers } from "../../../../api/auth";
 import TransactionsCard from "../../../../components/TransactionsCard";
 import Transaction from "../../../../types/transaction";
 import { MaterialIcons } from "@expo/vector-icons";
+import RocketLoader from "../../../../components/RocketLoader";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -259,14 +260,7 @@ const index = () => {
     t.type === "transfer" ? sum + t.amount : sum, 0) || 0;
 
   if (isLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading transactions...</Text>
-        </View>
-      </View>
-    );
+    return <RocketLoader message="Loading transactions..." size="large" />;
   }
 
   if (error) {

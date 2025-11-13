@@ -9,6 +9,7 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
+import RocketLoader from "../../../../components/RocketLoader";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { router } from "expo-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -159,14 +160,7 @@ const index = () => {
   const transferCount = transactions?.filter((t: any) => t.type === "transfer").length || 0;
 
   if (userLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading profile...</Text>
-        </View>
-      </View>
-    );
+    return <RocketLoader message="Loading profile..." size="large" />;
   }
 
   return (
