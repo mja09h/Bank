@@ -8,12 +8,16 @@ import {
   useWindowDimensions,
   TouchableOpacity,
   TextInput,
+  Animated,
+  Dimensions,
 } from "react-native";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAllUsers } from "../../../../api/auth";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 /**
  * Users Screen Component
@@ -26,6 +30,76 @@ const index = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const itemsPerPage = 30;
+
+  // Generate star positions (memoized to prevent regeneration)
+  const stars = useRef(
+    Array.from({ length: 15 }, (_, i) => ({
+      id: i,
+      x: Math.random() * SCREEN_WIDTH,
+      y: Math.random() * SCREEN_HEIGHT,
+      size: 2 + Math.random() * 3,
+      duration: 1000 + Math.random() * 2000,
+    }))
+  ).current;
+
+  // Generate moon positions (memoized)
+  const moons = useRef([
+    { x: SCREEN_WIDTH * 0.15, y: SCREEN_HEIGHT * 0.2, size: 35 },
+    { x: SCREEN_WIDTH * 0.8, y: SCREEN_HEIGHT * 0.3, size: 28 },
+  ]).current;
+
+  // Animation values for stars and moons
+  const starAnimations = useRef(
+    stars.map(() => new Animated.Value(Math.random()))
+  ).current;
+  const moonAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+
+  // Animate stars twinkling
+  useEffect(() => {
+    const starAnimationsArray = starAnimations.map((anim, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: stars[index].duration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: stars[index].duration,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+
+    Animated.parallel(starAnimationsArray).start();
+  }, []);
+
+  // Animate moons floating
+  useEffect(() => {
+    const moonAnimationsArray = moonAnimations.map((anim, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+
+    Animated.parallel(moonAnimationsArray).start();
+  }, []);
 
   const {
     data: usersData,
@@ -111,6 +185,61 @@ const index = () => {
 
   return (
     <View style={styles.container}>
+      {/* Animated Background - Stars and Moons */}
+      <View style={styles.backgroundContainer} pointerEvents="none">
+        {/* Animated Stars */}
+        {stars.map((star, index) => {
+          const opacity = starAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.3, 1],
+          });
+          return (
+            <Animated.View
+              key={star.id}
+              style={[
+                styles.star,
+                {
+                  left: star.x,
+                  top: star.y,
+                  width: star.size,
+                  height: star.size,
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
+
+        {/* Animated Moons */}
+        {moons.map((moon, index) => {
+          const translateY = moonAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 20],
+          });
+          const opacity = moonAnimations[index].interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.4, 0.7, 0.4],
+          });
+          return (
+            <Animated.View
+              key={index}
+              style={[
+                styles.moon,
+                {
+                  left: moon.x,
+                  top: moon.y,
+                  width: moon.size,
+                  height: moon.size,
+                  borderRadius: moon.size / 2,
+                  transform: [{ translateY }],
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
+
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -183,22 +312,35 @@ const index = () => {
                   }}
                   activeOpacity={0.8}
                 >
-                  <Image
-                    source={{
-                      uri:
-                        "https://react-bank-project.eapi.joincoded.com/" +
-                        user?.image,
-                    }}
-                    style={styles.userImage}
-                  />
+                  {user?.image && user.image.trim() !== "" ? (
+                    <Image
+                      source={{
+                        uri:
+                          "https://react-bank-project.eapi.joincoded.com/" +
+                          user.image,
+                      }}
+                      style={styles.userImage}
+                      onError={() => {
+                        // If image fails to load, it will fallback to placeholder
+                      }}
+                    />
+                  ) : (
+                    <View style={styles.userImagePlaceholder}>
+                      <Text style={styles.userImagePlaceholderText}>
+                        {user.username?.charAt(0)?.toUpperCase() || "?"}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.userInfo}>
                     <Text style={styles.username}>{user.username}</Text>
-                    <Text style={styles.balance}>{user.balance || 0} KD</Text>
+                    <Text style={styles.balance}>
+                      {user.balance || 0} KD
+                    </Text>
                   </View>
                   <MaterialIcons
                     name="arrow-forward"
                     size={20}
-                    color="#8E8E93"
+                    color="#007AFF"
                     style={styles.arrowIcon}
                   />
                 </TouchableOpacity>
@@ -308,15 +450,50 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0A0E27", // Dark space background
   },
+  // Background container for animated elements
+  backgroundContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
   scrollView: {
     flex: 1,
+    zIndex: 1,
+  },
+  // Animated star style
+  star: {
+    position: "absolute",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 50,
+    shadowColor: "#FFFFFF",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 1,
+    shadowRadius: 3,
+  },
+  // Animated moon style
+  moon: {
+    position: "absolute",
+    backgroundColor: "#F5F5DC", // Moon color
+    shadowColor: "#F5F5DC",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
   },
   // Header section
   header: {
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 60,
-    paddingBottom: 20,
+    paddingBottom: 30,
     paddingHorizontal: 20,
   },
   // Search section
@@ -328,10 +505,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#1A1F3A",
-    borderRadius: 12,
+    borderRadius: 16,
     paddingHorizontal: 15,
-    borderWidth: 1,
-    borderColor: "#2A2F4A",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    shadowColor: "#007AFF",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
   searchIcon: {
     marginRight: 10,
@@ -373,16 +558,16 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#1A1F3A", // Dark card background
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#2A2F4A",
-    shadowColor: "#000",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    shadowColor: "#007AFF",
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4,
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
     minWidth: 100,
     position: "relative",
   },
@@ -392,8 +577,24 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30, // Perfect circle
     marginBottom: 12,
-    borderWidth: 2,
-    borderColor: "#2A2F4A",
+    borderWidth: 3,
+    borderColor: "#007AFF",
+  },
+  userImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginBottom: 12,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 3,
+    borderColor: "#007AFF",
+  },
+  userImagePlaceholderText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
   // User info container
   userInfo: {
@@ -412,9 +613,9 @@ const styles = StyleSheet.create({
   // Balance text
   balance: {
     fontSize: 14,
-    color: "#8E8E93",
+    color: "#007AFF",
     textAlign: "center",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   // Arrow icon for navigation
   arrowIcon: {
@@ -472,8 +673,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1F3A",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#2A2F4A",
+    borderWidth: 2,
+    borderColor: "#007AFF",
   },
   paginationButtonDisabled: {
     opacity: 0.3,
@@ -491,8 +692,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1A1F3A",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#2A2F4A",
+    borderWidth: 2,
+    borderColor: "#007AFF",
     paddingHorizontal: 12,
   },
   paginationNumberActive: {

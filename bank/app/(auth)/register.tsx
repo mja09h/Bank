@@ -3,13 +3,14 @@ import {
   Text,
   View,
   ScrollView,
-  Button,
   TextInput,
   TouchableOpacity,
   Image,
-  Alert,
+  ActivityIndicator,
+  Animated,
+  Dimensions,
 } from "react-native";
-import React, { useContext, useState } from "react";
+import React, { useContext, useState, useEffect, useRef } from "react";
 import UserInfo from "../../types/userInfo";
 import { useMutation } from "@tanstack/react-query";
 import { register } from "../../api/auth";
@@ -17,6 +18,10 @@ import * as ImagePicker from "expo-image-picker";
 import { Redirect, useRouter } from "expo-router";
 import AuthContext from "../../context/authContext";
 import { storeToken } from "../../api/storage";
+import { MaterialIcons } from "@expo/vector-icons";
+import CustomAlert from "../../components/CustomAlert";
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const Register = () => {
   const { isAuthenticated, setIsAuthenticated } = useContext(AuthContext);
@@ -27,6 +32,81 @@ const Register = () => {
   const [password, setPassword] = useState("");
   const [image, setImage] = useState("");
   const router = useRouter();
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error" | "info" | "warning">("error");
+  const [alertButtons, setAlertButtons] = useState<Array<{ text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }>>([]);
+
+  // Generate star positions (memoized to prevent regeneration)
+  const stars = useRef(
+    Array.from({ length: 15 }, (_, i) => ({
+      id: i,
+      x: Math.random() * SCREEN_WIDTH,
+      y: Math.random() * SCREEN_HEIGHT,
+      size: 2 + Math.random() * 3,
+      duration: 1000 + Math.random() * 2000,
+    }))
+  ).current;
+
+  // Generate moon positions (memoized)
+  const moons = useRef([
+    { x: SCREEN_WIDTH * 0.15, y: SCREEN_HEIGHT * 0.2, size: 35 },
+    { x: SCREEN_WIDTH * 0.8, y: SCREEN_HEIGHT * 0.3, size: 28 },
+  ]).current;
+
+  // Animation values for stars and moons
+  const starAnimations = useRef(
+    stars.map(() => new Animated.Value(Math.random()))
+  ).current;
+  const moonAnimations = useRef([
+    new Animated.Value(0),
+    new Animated.Value(0),
+  ]).current;
+
+  // Animate stars twinkling
+  useEffect(() => {
+    const starAnimationsArray = starAnimations.map((anim, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: stars[index].duration,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: stars[index].duration,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+
+    Animated.parallel(starAnimationsArray).start();
+  }, []);
+
+  // Animate moons floating
+  useEffect(() => {
+    const moonAnimationsArray = moonAnimations.map((anim, index) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.timing(anim, {
+            toValue: 1,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(anim, {
+            toValue: 0,
+            duration: 3000 + index * 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    });
+
+    Animated.parallel(moonAnimationsArray).start();
+  }, []);
 
   const { mutate: registerMutation, isPending } = useMutation({
     mutationKey: ["register"],
@@ -38,7 +118,16 @@ const Register = () => {
     },
     onError: (error: any) => {
       console.log(error);
-      Alert.alert("Registration Failed");
+      setAlertTitle("Registration Failed");
+      setAlertMessage(error?.response?.data?.message || "An error occurred during registration. Please try again.");
+      setAlertType("error");
+      setAlertButtons([
+        {
+          text: "OK",
+          onPress: () => setAlertVisible(false),
+        },
+      ]);
+      setAlertVisible(true);
     },
   });
 
@@ -63,51 +152,176 @@ const Register = () => {
       console.log("userInfo in handleRegister", { username, password, image });
       registerMutation({ username, password, image });
     } else {
-      Alert.alert("Please fill all fields");
+      setAlertTitle("Missing Information");
+      setAlertMessage("Please fill all fields including username, password, and profile image.");
+      setAlertType("warning");
+      setAlertButtons([
+        {
+          text: "OK",
+          onPress: () => setAlertVisible(false),
+        },
+      ]);
+      setAlertVisible(true);
     }
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Register</Text>
-      <TextInput
-        placeholder="Username"
-        value={username}
-        onChangeText={setUsername}
-        autoCapitalize="none"
-      />
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        autoCapitalize="none"
-      />
+    <View style={styles.container}>
+      {/* Animated Background - Stars and Moons */}
+      <View style={styles.backgroundContainer} pointerEvents="none">
+        {/* Animated Stars */}
+        {stars.map((star, index) => {
+          const opacity = starAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.3, 1],
+          });
+          return (
+            <Animated.View
+              key={star.id}
+              style={[
+                styles.star,
+                {
+                  left: star.x,
+                  top: star.y,
+                  width: star.size,
+                  height: star.size,
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
 
-      <TouchableOpacity style={{ marginTop: 20 }} onPress={pickImage}>
-        {image ? (
-          <Image
-            source={{ uri: image }}
-            style={{ width: 100, height: 100, borderRadius: 50 }}
-          />
-        ) : (
-          <Text style={{ fontSize: 16 }}>Upload Profile Image</Text>
-        )}
-      </TouchableOpacity>
+        {/* Animated Moons */}
+        {moons.map((moon, index) => {
+          const translateY = moonAnimations[index].interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, 20],
+          });
+          const opacity = moonAnimations[index].interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.4, 0.7, 0.4],
+          });
+          return (
+            <Animated.View
+              key={index}
+              style={[
+                styles.moon,
+                {
+                  left: moon.x,
+                  top: moon.y,
+                  width: moon.size,
+                  height: moon.size,
+                  borderRadius: moon.size / 2,
+                  transform: [{ translateY }],
+                  opacity,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
 
-      <Button
-        title={isPending ? "Registering..." : "Register"}
-        onPress={handleRegister}
-        disabled={isPending}
-      />
-
-      <TouchableOpacity
-        onPress={() => router.push("/(auth)/login")}
-        style={styles.loginButton}
+      {/* Main Content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.loginText}>Do have a account? Login here</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* Header Section */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join us and start banking</Text>
+        </View>
+
+        {/* Form Card */}
+        <View style={styles.formCard}>
+          {/* Username Input */}
+          <View style={styles.inputContainer}>
+            <MaterialIcons name="person" size={20} color="#8E8E93" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor="#8E8E93"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
+          </View>
+
+          {/* Password Input */}
+          <View style={styles.inputContainer}>
+            <MaterialIcons name="lock" size={20} color="#8E8E93" style={styles.inputIcon} />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#8E8E93"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </View>
+
+          {/* Profile Image Picker */}
+          <View style={styles.imagePickerContainer}>
+            <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.imagePickerButton}>
+              {image ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: image }} style={styles.imagePreview} />
+                  <View style={styles.imageEditBadge}>
+                    <MaterialIcons name="edit" size={20} color="#FFFFFF" />
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.imagePlaceholder}>
+                  <MaterialIcons name="add-a-photo" size={64} color="#007AFF" />
+                  <Text style={styles.imagePlaceholderText}>Upload Profile Image</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Register Button */}
+          <TouchableOpacity
+            style={[styles.registerButton, isPending && styles.registerButtonDisabled]}
+            onPress={handleRegister}
+            disabled={isPending}
+            activeOpacity={0.8}
+          >
+            {isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <Text style={styles.registerButtonText}>Register</Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Login Link */}
+          <TouchableOpacity
+            onPress={() => router.push("/(auth)/login")}
+            style={styles.loginLink}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.loginLinkText}>
+              Already have an account? <Text style={styles.loginLinkBold}>Login here</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        buttons={alertButtons}
+        onDismiss={() => setAlertVisible(false)}
+      />
+    </View>
   );
 };
 
@@ -116,39 +330,205 @@ export default Register;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
+    backgroundColor: "#0A0E27", // Deep space dark blue
+  },
+  backgroundContainer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 0,
+  },
+  scrollView: {
+    flex: 1,
+    zIndex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  star: {
+    position: "absolute",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 50,
+    shadowColor: "#FFFFFF",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 1,
+    shadowRadius: 3,
+  },
+  moon: {
+    position: "absolute",
+    backgroundColor: "#F5F5DC", // Moon color
+    shadowColor: "#F5F5DC",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.8,
+    shadowRadius: 10,
+  },
+  header: {
+    alignItems: "center",
+    paddingTop: 80,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
   },
   title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
+    fontSize: 36,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#8E8E93",
+    fontWeight: "500",
+  },
+  formCard: {
+    backgroundColor: "#1A1F3A", // Dark card background
+    marginHorizontal: 20,
+    padding: 24,
+    borderRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: "#2A2F4A", // Subtle border
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0A0E27",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#2A2F4A",
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    height: 40,
-    borderColor: "gray",
-    borderWidth: 1,
-    marginBottom: 10,
-    paddingHorizontal: 10,
-  },
-  button: {
-    backgroundColor: "blue",
-    color: "white",
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 20,
-  },
-  buttonText: {
-    color: "white",
-    fontWeight: "bold",
-    textAlign: "center",
-  },
-  loginButton: {
-    marginTop: 20,
-    alignItems: "center",
-  },
-  loginText: {
-    color: "blue",
+    flex: 1,
     fontSize: 16,
-    textDecorationLine: "underline",
+    color: "#FFFFFF",
+    fontWeight: "500",
+  },
+  imagePickerContainer: {
+    marginBottom: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imagePickerButton: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imagePreviewContainer: {
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  imagePreview: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 3,
+    borderColor: "#007AFF",
+    backgroundColor: "#0A0E27",
+  },
+  imageEditBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#1A1F3A",
+    shadowColor: "#007AFF",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  imagePlaceholder: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 3,
+    borderColor: "#007AFF",
+    borderStyle: "dashed",
+    backgroundColor: "rgba(0, 122, 255, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 8,
+  },
+  imagePlaceholderText: {
+    color: "#007AFF",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 8,
+  },
+  imagePlaceholderSubtext: {
+    color: "#8E8E93",
+    fontSize: 12,
+    marginTop: 4,
+  },
+  registerButton: {
+    backgroundColor: "#007AFF",
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+    shadowColor: "#007AFF",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    gap: 8,
+  },
+  registerButtonDisabled: {
+    opacity: 0.6,
+  },
+  registerButtonText: {
+    color: "#FFFFFF",
+    fontSize: 18,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  loginLink: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  loginLinkText: {
+    color: "#8E8E93",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  loginLinkBold: {
+    color: "#007AFF",
+    fontWeight: "700",
   },
 });

@@ -6,18 +6,18 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
   Image,
   Animated,
   Dimensions,
 } from "react-native";
-import React, { useState, useEffect, useRef } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { deposit, withdraw } from "../../../../api/transactions";
-import { getUser } from "../../../../api/auth";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { deposit, withdraw, getMyTransactions } from "../../../../api/transactions";
+import { getUser, getUserById } from "../../../../api/auth";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter, router } from "expo-router";
+import CustomAlert from "../../../../components/CustomAlert";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -29,10 +29,16 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const index = () => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [depositModalVisible, setDepositModalVisible] = useState(false);
   const [withdrawModalVisible, setWithdrawModalVisible] = useState(false);
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error" | "info" | "warning">("info");
+  const [alertButtons, setAlertButtons] = useState<Array<{ text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }>>([]);
 
   // Generate star positions (memoized to prevent regeneration)
   const stars = useRef(
@@ -106,10 +112,45 @@ const index = () => {
     Animated.parallel(moonAnimationsArray).start();
   }, []);
 
-  const { data: user, refetch: refetchUser } = useQuery({
+  const { data: user } = useQuery({
     queryKey: ["user"],
     queryFn: () => getUser(),
   });
+
+  // Fetch transactions to get recent transfers
+  const { data: transactions } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: () => getMyTransactions(),
+  });
+
+  // Get recent transfer transactions (last 5 unique users)
+  const recentTransferUserIds = useMemo(() => {
+    if (!transactions) return [];
+    
+    // Filter transfer transactions and get unique "to" user IDs
+    const transferTransactions = transactions
+      .filter((t: any) => t.type === "transfer")
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA; // Newest first
+      });
+
+    // Get unique user IDs (toUserId or to)
+    const uniqueUserIds: string[] = [];
+    const seenIds = new Set<string>();
+    
+    for (const transaction of transferTransactions) {
+      const toUserId = (transaction as any).toUserId || (transaction as any).to;
+      if (toUserId && !seenIds.has(String(toUserId))) {
+        uniqueUserIds.push(String(toUserId));
+        seenIds.add(String(toUserId));
+        if (uniqueUserIds.length >= 5) break; // Limit to 5 recent users
+      }
+    }
+    
+    return uniqueUserIds;
+  }, [transactions]);
 
   const { mutate: depositMutation, isPending: isDepositPending } = useMutation({
     mutationKey: ["deposit"],
@@ -118,14 +159,21 @@ const index = () => {
       setDepositModalVisible(false);
       setAmount("");
       setError("");
-      refetchUser();
-      Alert.alert("Success", "Funds deposited successfully!");
+      // Invalidate queries to refresh data across the app
+      queryClient.invalidateQueries({ queryKey: ["user"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      setAlertTitle("Success");
+      setAlertMessage("Funds deposited successfully!");
+      setAlertType("success");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
     },
     onError: (error: any) => {
-      Alert.alert(
-        "Deposit Failed",
-        error.response?.data?.message || "Failed to deposit funds"
-      );
+      setAlertTitle("Deposit Failed");
+      setAlertMessage(error.response?.data?.message || "Failed to deposit funds");
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
     },
   });
 
@@ -137,15 +185,22 @@ const index = () => {
         setWithdrawModalVisible(false);
         setAmount("");
         setError("");
-        refetchUser();
-        Alert.alert("Success", "Funds withdrawn successfully!");
-      },
-      onError: (error: any) => {
-        Alert.alert(
-          "Withdraw Failed",
-          error.response?.data?.message || "Failed to withdraw funds"
-        );
-      },
+      // Invalidate queries to refresh data across the app
+      queryClient.invalidateQueries({ queryKey: ["user"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      setAlertTitle("Success");
+      setAlertMessage("Funds withdrawn successfully!");
+      setAlertType("success");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+    },
+    onError: (error: any) => {
+      setAlertTitle("Withdraw Failed");
+      setAlertMessage(error.response?.data?.message || "Failed to withdraw funds");
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+    },
     });
 
   const validateAmount = (isWithdraw: boolean = false): boolean => {
@@ -367,6 +422,25 @@ const index = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Recent Transfers Section */}
+        {recentTransferUserIds.length > 0 && (
+          <View style={styles.recentTransfersContainer}>
+            <Text style={styles.recentTransfersTitle}>Recent Transfers</Text>
+            <Text style={styles.recentTransfersSubtitle}>
+              Users you recently transferred to
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentTransfersScroll}
+            >
+              {recentTransferUserIds.map((userId) => (
+                <RecentTransferUser key={userId} userId={userId} />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
         {/* Deposit Modal */}
         <Modal
           animationType="slide"
@@ -477,7 +551,66 @@ const index = () => {
           </View>
         </Modal>
       </ScrollView>
+
+      {/* Custom Alert - Outside ScrollView for proper overlay */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        buttons={alertButtons}
+        onDismiss={() => setAlertVisible(false)}
+      />
     </View>
+  );
+};
+
+// Recent Transfer User Component
+const RecentTransferUser = ({ userId }: { userId: string }) => {
+  const router = useRouter();
+  const { data: user, isLoading } = useQuery({
+    queryKey: ["user", userId],
+    queryFn: () => getUserById(userId),
+    enabled: !!userId,
+  });
+
+  if (isLoading) {
+    return (
+      <View style={styles.recentUserCard}>
+        <ActivityIndicator size="small" color="#007AFF" />
+      </View>
+    );
+  }
+
+  if (!user) return null;
+
+  return (
+    <TouchableOpacity
+      style={styles.recentUserCard}
+      onPress={() => router.push(`/(protected)/(tabs)/(users)/${userId}`)}
+      activeOpacity={0.8}
+    >
+      {user.image && user.image.trim() !== "" ? (
+        <Image
+          source={{
+            uri: "https://react-bank-project.eapi.joincoded.com/" + user.image,
+          }}
+          style={styles.recentUserImage}
+          onError={() => {
+            // If image fails to load, it will fallback to placeholder
+          }}
+        />
+      ) : (
+        <View style={styles.recentUserImagePlaceholder}>
+          <Text style={styles.recentUserImagePlaceholderText}>
+            {user.username?.charAt(0)?.toUpperCase() || "?"}
+          </Text>
+        </View>
+      )}
+      <Text style={styles.recentUserName} numberOfLines={1}>
+        {user.username || "Unknown"}
+      </Text>
+    </TouchableOpacity>
   );
 };
 
@@ -785,5 +918,75 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  // Recent Transfers Section
+  recentTransfersContainer: {
+    marginTop: 20,
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  recentTransfersTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#FFFFFF",
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  recentTransfersSubtitle: {
+    fontSize: 14,
+    color: "#8E8E93",
+    marginBottom: 16,
+    fontWeight: "500",
+  },
+  recentTransfersScroll: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  recentUserCard: {
+    backgroundColor: "#1A1F3A",
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    minWidth: 100,
+    borderWidth: 1,
+    borderColor: "#2A2F4A",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  recentUserImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    marginBottom: 8,
+  },
+  recentUserImagePlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: "#007AFF",
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  recentUserImagePlaceholderText: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#FFFFFF",
+  },
+  recentUserName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#FFFFFF",
+    textAlign: "center",
   },
 });

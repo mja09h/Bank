@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  Alert,
 } from "react-native";
 import React, { useState, useMemo, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +14,7 @@ import { transfer } from "../../../../api/transactions";
 import { getAllUsers, getUser } from "../../../../api/auth";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import CustomAlert from "../../../../components/CustomAlert";
 
 /**
  * Transfer Screen Component
@@ -30,6 +30,11 @@ const Transfer = () => {
   const [error, setError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 30;
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error" | "info" | "warning">("info");
+  const [alertButtons, setAlertButtons] = useState<Array<{ text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }>>([]);
 
   // Fetch all users
   const {
@@ -115,10 +120,14 @@ const Transfer = () => {
     mutationFn: ({ amount, username }: { amount: number; username: string }) =>
       transfer(amount, username),
     onSuccess: () => {
-      // Invalidate queries to refresh user balance and users list
+      // Invalidate queries to refresh data across the app
       queryClient.invalidateQueries({ queryKey: ["user"] });
       queryClient.invalidateQueries({ queryKey: ["users"] });
-      Alert.alert("Success", "Transfer completed successfully!", [
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      setAlertTitle("Success");
+      setAlertMessage("Transfer completed successfully!");
+      setAlertType("success");
+      setAlertButtons([
         {
           text: "OK",
           onPress: () => {
@@ -126,12 +135,17 @@ const Transfer = () => {
           },
         },
       ]);
+      setAlertVisible(true);
     },
     onError: (error: any) => {
-      setError(
-        error?.response?.data?.message ||
-          "Failed to transfer funds. Please try again."
-      );
+      const errorMessage = error?.response?.data?.message ||
+        "Failed to transfer funds. Please try again.";
+      setError(errorMessage);
+      setAlertTitle("Transfer Failed");
+      setAlertMessage(errorMessage);
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
     },
   });
 
@@ -230,14 +244,25 @@ const Transfer = () => {
         {selectedUser && (
           <View style={styles.selectedUserCard}>
             <View style={styles.selectedUserInfo}>
-              <Image
-                source={{
-                  uri:
-                    "https://react-bank-project.eapi.joincoded.com/" +
-                    selectedUser?.image,
-                }}
-                style={styles.selectedUserImage}
-              />
+              {selectedUser?.image && selectedUser.image.trim() !== "" ? (
+                <Image
+                  source={{
+                    uri:
+                      "https://react-bank-project.eapi.joincoded.com/" +
+                      selectedUser.image,
+                  }}
+                  style={styles.selectedUserImage}
+                  onError={() => {
+                    // If image fails to load, it will fallback to placeholder
+                  }}
+                />
+              ) : (
+                <View style={styles.selectedUserImagePlaceholder}>
+                  <Text style={styles.selectedUserImagePlaceholderText}>
+                    {selectedUser.username?.charAt(0)?.toUpperCase() || "?"}
+                  </Text>
+                </View>
+              )}
               <View style={styles.selectedUserDetails}>
                 <Text style={styles.selectedUserName}>
                   {selectedUser.username}
@@ -306,14 +331,25 @@ const Transfer = () => {
                       style={styles.userCard}
                       onPress={() => handleSelectUser(userItem)}
                     >
-                      <Image
-                        source={{
-                          uri:
-                            "https://react-bank-project.eapi.joincoded.com/" +
-                            userItem?.image,
-                        }}
-                        style={styles.userImage}
-                      />
+                      {userItem?.image && userItem.image.trim() !== "" ? (
+                        <Image
+                          source={{
+                            uri:
+                              "https://react-bank-project.eapi.joincoded.com/" +
+                              userItem.image,
+                          }}
+                          style={styles.userImage}
+                          onError={() => {
+                            // If image fails to load, it will fallback to placeholder
+                          }}
+                        />
+                      ) : (
+                        <View style={styles.userImagePlaceholder}>
+                          <Text style={styles.userImagePlaceholderText}>
+                            {userItem.username?.charAt(0)?.toUpperCase() || "?"}
+                          </Text>
+                        </View>
+                      )}
                       <View style={styles.userInfo}>
                         <Text style={styles.userName}>{userItem.username}</Text>
                         <Text style={styles.userBalance}>
@@ -507,6 +543,16 @@ const Transfer = () => {
           </View>
         )}
       </ScrollView>
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        buttons={alertButtons}
+        onDismiss={() => setAlertVisible(false)}
+      />
     </View>
   );
 };
@@ -608,6 +654,24 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: "#007AFF",
+  },
+  selectedUserImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+  },
+  selectedUserImagePlaceholderText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
   selectedUserDetails: {
     flex: 1,
@@ -649,6 +713,24 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     marginRight: 12,
+    borderWidth: 2,
+    borderColor: "#007AFF",
+  },
+  userImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+    backgroundColor: "#007AFF",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#007AFF",
+  },
+  userImagePlaceholderText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFFFFF",
   },
   userInfo: {
     flex: 1,

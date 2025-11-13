@@ -64,4 +64,14 @@ const updateProfile = async (imageUri: string) => {
   }
 };
 
-export { register, login, getAllUsers, getUser, updateProfile };
+const getUserById = async (userId: string) => {
+  try {
+    const { data } = await api.get(`/auth/user/${userId}`);
+    return data;
+  } catch (error) {
+    console.log(error);
+    throw error;
+  }
+};
+
+export { register, login, getAllUsers, getUser, updateProfile, getUserById };

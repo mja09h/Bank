@@ -6,6 +6,7 @@ const _layout = () => {
   return (
     <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="[transactionId]" options={{ headerShown: false }} />
     </Stack>
   )
 }
