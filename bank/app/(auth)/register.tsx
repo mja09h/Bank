@@ -20,17 +20,29 @@ import AuthContext from "../../context/authContext";
 import { storeToken } from "../../api/storage";
 import { MaterialIcons } from "@expo/vector-icons";
 import CustomAlert from "../../components/CustomAlert";
+import { Formik } from "formik";
+import * as Yup from "yup";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Validation schema
+const registerSchema = Yup.object().shape({
+  username: Yup.string()
+    .required("Username is required")
+    .min(3, "Username must be at least 3 characters")
+    .max(20, "Username must be less than 20 characters"),
+  password: Yup.string()
+    .required("Password is required")
+    .min(6, "Password must be at least 6 characters"),
+  image: Yup.string()
+    .required("Profile image is required"),
+});
 
 const Register = () => {
   const { isAuthenticated, setIsAuthenticated } = useContext(AuthContext);
   if (isAuthenticated) {
     return <Redirect href="/(protected)/(tabs)/(home)" />;
   }
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [image, setImage] = useState("");
   const router = useRouter();
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
@@ -131,7 +143,7 @@ const Register = () => {
     },
   });
 
-  const pickImage = async () => {
+  const pickImage = async (setFieldValue: (field: string, value: string) => void) => {
     // No permissions request is necessary for launching the image library
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images", "videos"],
@@ -143,25 +155,7 @@ const Register = () => {
     console.log("result in pickImage", result);
 
     if (!result.canceled) {
-      setImage(result.assets[0].uri);
-    }
-  };
-
-  const handleRegister = () => {
-    if (password && username && image) {
-      console.log("userInfo in handleRegister", { username, password, image });
-      registerMutation({ username, password, image });
-    } else {
-      setAlertTitle("Missing Information");
-      setAlertMessage("Please fill all fields including username, password, and profile image.");
-      setAlertType("warning");
-      setAlertButtons([
-        {
-          text: "OK",
-          onPress: () => setAlertVisible(false),
-        },
-      ]);
-      setAlertVisible(true);
+      setFieldValue("image", result.assets[0].uri);
     }
   };
 
@@ -230,86 +224,126 @@ const Register = () => {
       >
         {/* Header Section */}
         <View style={styles.header}>
+          <Image 
+            source={require("../../assets/orbit-logo-24.png")} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Join us and start banking</Text>
         </View>
 
         {/* Form Card */}
-        <View style={styles.formCard}>
-          {/* Username Input */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="person" size={20} color="#8E8E93" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor="#8E8E93"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="lock" size={20} color="#8E8E93" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#8E8E93"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-          </View>
-
-          {/* Profile Image Picker */}
-          <View style={styles.imagePickerContainer}>
-            <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.imagePickerButton}>
-              {image ? (
-                <View style={styles.imagePreviewContainer}>
-                  <Image source={{ uri: image }} style={styles.imagePreview} />
-                  <View style={styles.imageEditBadge}>
-                    <MaterialIcons name="edit" size={20} color="#FFFFFF" />
-                  </View>
+        <Formik
+          initialValues={{ username: "", password: "", image: "" }}
+          validationSchema={registerSchema}
+          onSubmit={(values) => {
+            registerMutation({ username: values.username, password: values.password, image: values.image });
+          }}
+        >
+          {({ handleChange, handleBlur, handleSubmit, setFieldValue, values, errors, touched }) => (
+            <View style={styles.formCard}>
+              {/* Username Input */}
+              <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputContainer,
+                  errors.username && touched.username && styles.inputContainerError
+                ]}>
+                  <MaterialIcons name="person" size={20} color={errors.username && touched.username ? "#FF3B30" : "#8E8E93"} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Username"
+                    placeholderTextColor="#8E8E93"
+                    value={values.username}
+                    onChangeText={handleChange("username")}
+                    onBlur={handleBlur("username")}
+                    autoCapitalize="none"
+                  />
                 </View>
-              ) : (
-                <View style={styles.imagePlaceholder}>
-                  <MaterialIcons name="add-a-photo" size={64} color="#007AFF" />
-                  <Text style={styles.imagePlaceholderText}>Upload Profile Image</Text>
+                {errors.username && touched.username && (
+                  <Text style={styles.errorText}>{errors.username}</Text>
+                )}
+              </View>
+
+              {/* Password Input */}
+              <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputContainer,
+                  errors.password && touched.password && styles.inputContainerError
+                ]}>
+                  <MaterialIcons name="lock" size={20} color={errors.password && touched.password ? "#FF3B30" : "#8E8E93"} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#8E8E93"
+                    value={values.password}
+                    onChangeText={handleChange("password")}
+                    onBlur={handleBlur("password")}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
                 </View>
-              )}
-            </TouchableOpacity>
-          </View>
+                {errors.password && touched.password && (
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                )}
+              </View>
 
-          {/* Register Button */}
-          <TouchableOpacity
-            style={[styles.registerButton, isPending && styles.registerButtonDisabled]}
-            onPress={handleRegister}
-            disabled={isPending}
-            activeOpacity={0.8}
-          >
-            {isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Text style={styles.registerButtonText}>Register</Text>
-                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
-              </>
-            )}
-          </TouchableOpacity>
+              {/* Profile Image Picker */}
+              <View style={styles.imagePickerContainer}>
+                <TouchableOpacity 
+                  onPress={() => pickImage(setFieldValue)} 
+                  activeOpacity={0.8} 
+                  style={styles.imagePickerButton}
+                >
+                  {values.image ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: values.image }} style={styles.imagePreview} />
+                      <View style={styles.imageEditBadge}>
+                        <MaterialIcons name="edit" size={20} color="#FFFFFF" />
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <MaterialIcons name="add-a-photo" size={64} color="#007AFF" />
+                      <Text style={styles.imagePlaceholderText}>Upload Profile Image</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                {errors.image && touched.image && (
+                  <Text style={styles.errorText}>{errors.image}</Text>
+                )}
+              </View>
 
-          {/* Login Link */}
-          <TouchableOpacity
-            onPress={() => router.push("/(auth)/login")}
-            style={styles.loginLink}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.loginLinkText}>
-              Already have an account? <Text style={styles.loginLinkBold}>Login here</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
+              {/* Register Button */}
+              <TouchableOpacity
+                style={[styles.registerButton, isPending && styles.registerButtonDisabled]}
+                onPress={() => handleSubmit()}
+                disabled={isPending}
+                activeOpacity={0.8}
+              >
+                {isPending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.registerButtonText}>Register</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Login Link */}
+              <TouchableOpacity
+                onPress={() => router.push("/(auth)/login")}
+                style={styles.loginLink}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.loginLinkText}>
+                  Already have an account? <Text style={styles.loginLinkBold}>Login here</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </Formik>
       </ScrollView>
 
       {/* Custom Alert */}
@@ -376,6 +410,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingHorizontal: 20,
   },
+  logo: {
+    width: 150,
+    height: 150,
+    marginBottom: 10,
+    borderRadius: 150,
+  },
   title: {
     fontSize: 36,
     fontWeight: "700",
@@ -422,6 +462,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: "#FFFFFF",
+    fontWeight: "500",
+  },
+  inputWrapper: {
+    marginBottom: 16,
+  },
+  inputContainerError: {
+    borderColor: "#FF3B30",
+  },
+  errorText: {
+    color: "#FF3B30",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 16,
     fontWeight: "500",
   },
   imagePickerContainer: {

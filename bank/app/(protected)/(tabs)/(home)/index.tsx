@@ -420,6 +420,30 @@ const index = () => {
               </View>
             </View>
           </TouchableOpacity>
+
+          {/* Generate Deposit Code Button */}
+          <TouchableOpacity
+            style={[styles.actionButton, styles.depositLinkButton]}
+            onPress={() => router.push("/(protected)/(tabs)/(home)/deposit-code")}
+            activeOpacity={0.9}
+          >
+            <View style={styles.buttonContent}>
+              <View
+                style={[styles.circularIconContainer, styles.depositLinkIconBg]}
+              >
+                <MaterialIcons name="link" size={32} color="#FF9500" />
+              </View>
+              <View style={styles.buttonTextContainer}>
+                <Text style={styles.actionButtonText}>Deposit Code</Text>
+                <Text style={styles.actionButtonSubtext}>
+                  Generate or use deposit codes
+                </Text>
+              </View>
+              <View style={styles.arrowContainer}>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              </View>
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Recent Transfers Section */}
@@ -550,6 +574,7 @@ const index = () => {
             </View>
           </View>
         </Modal>
+
       </ScrollView>
 
       {/* Custom Alert - Outside ScrollView for proper overlay */}
@@ -845,6 +870,32 @@ const styles = StyleSheet.create({
   transferButton: {
     borderColor: "#007AFF", // Blue for transfer
     shadowColor: "#007AFF",
+  },
+  depositLinkButton: {
+    borderColor: "#FF9500", // Orange for deposit link
+    shadowColor: "#FF9500",
+  },
+  depositLinkIconBg: {
+    borderColor: "#FF9500",
+    backgroundColor: "rgba(255, 149, 0, 0.15)",
+    shadowColor: "#FF9500",
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  generateLinkButton: {
+    backgroundColor: "#FF9500",
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#8E8E93",
+    marginBottom: 20,
+    textAlign: "center",
+    fontWeight: "500",
   },
   // Modal styles - dark theme
   modalOverlay: {

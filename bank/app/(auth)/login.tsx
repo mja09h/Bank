@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Image,
 } from "react-native";
 import React, { useContext, useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -18,8 +19,20 @@ import { Redirect, useRouter } from "expo-router";
 import AuthContext from "../../context/authContext";
 import { MaterialIcons } from "@expo/vector-icons";
 import CustomAlert from "../../components/CustomAlert";
+import { Formik } from "formik";
+import * as Yup from "yup";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+
+// Validation schema
+const loginSchema = Yup.object().shape({
+  username: Yup.string()
+    .required("Username is required"),
+    // .min(3, "Username must be at least 3 characters"),
+  password: Yup.string()
+    .required("Password is required"),
+    // .min(6, "Password must be at least 6 characters"),
+});
 
 const login = () => {
   const { isAuthenticated, setIsAuthenticated } = useContext(AuthContext);
@@ -27,8 +40,6 @@ const login = () => {
     return <Redirect href="/(protected)/(tabs)/(home)" />
   }
   
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
   const router = useRouter();
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
@@ -128,23 +139,6 @@ const login = () => {
     },
   });
 
-  const handleLogin = () => {
-    if (username && password) {
-      loginMutation({ username, password });
-    } else {
-      setAlertTitle("Missing Information");
-      setAlertMessage("Please enter both username and password.");
-      setAlertType("warning");
-      setAlertButtons([
-        {
-          text: "OK",
-          onPress: () => setAlertVisible(false),
-        },
-      ]);
-      setAlertVisible(true);
-    }
-  };
-
   return (
     <View style={styles.container}>
       {/* Animated Background - Stars and Moons */}
@@ -210,67 +204,100 @@ const login = () => {
       >
         {/* Header Section */}
         <View style={styles.header}>
+          <Image 
+            source={require("../../assets/orbit-logo-24.png")} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to your account</Text>
         </View>
 
         {/* Form Card */}
-        <View style={styles.formCard}>
-          {/* Username Input */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="person" size={20} color="#8E8E93" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Username"
-              placeholderTextColor="#8E8E93"
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-            />
-          </View>
+        <Formik
+          initialValues={{ username: "", password: "" }}
+          validationSchema={loginSchema}
+          onSubmit={(values) => {
+            loginMutation({ username: values.username, password: values.password });
+          }}
+        >
+          {({ handleChange, handleBlur, handleSubmit, values, errors, touched }) => (
+            <View style={styles.formCard}>
+              {/* Username Input */}
+              <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputContainer,
+                  errors.username && touched.username && styles.inputContainerError
+                ]}>
+                  <MaterialIcons name="person" size={20} color={errors.username && touched.username ? "#FF3B30" : "#8E8E93"} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Username"
+                    placeholderTextColor="#8E8E93"
+                    value={values.username}
+                    onChangeText={handleChange("username")}
+                    onBlur={handleBlur("username")}
+                    autoCapitalize="none"
+                  />
+                </View>
+                {errors.username && touched.username && (
+                  <Text style={styles.errorText}>{errors.username}</Text>
+                )}
+              </View>
 
-          {/* Password Input */}
-          <View style={styles.inputContainer}>
-            <MaterialIcons name="lock" size={20} color="#8E8E93" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#8E8E93"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
-          </View>
+              {/* Password Input */}
+              <View style={styles.inputWrapper}>
+                <View style={[
+                  styles.inputContainer,
+                  errors.password && touched.password && styles.inputContainerError
+                ]}>
+                  <MaterialIcons name="lock" size={20} color={errors.password && touched.password ? "#FF3B30" : "#8E8E93"} style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Password"
+                    placeholderTextColor="#8E8E93"
+                    value={values.password}
+                    onChangeText={handleChange("password")}
+                    onBlur={handleBlur("password")}
+                    secureTextEntry
+                    autoCapitalize="none"
+                  />
+                </View>
+                {errors.password && touched.password && (
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                )}
+              </View>
 
-          {/* Login Button */}
-          <TouchableOpacity
-            style={[styles.loginButton, isPending && styles.loginButtonDisabled]}
-            onPress={handleLogin}
-            disabled={isPending}
-            activeOpacity={0.8}
-          >
-            {isPending ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <Text style={styles.loginButtonText}>Login</Text>
-                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
-              </>
-            )}
-          </TouchableOpacity>
+              {/* Login Button */}
+              <TouchableOpacity
+                style={[styles.loginButton, isPending && styles.loginButtonDisabled]}
+                onPress={() => handleSubmit()}
+                disabled={isPending}
+                activeOpacity={0.8}
+              >
+                {isPending ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.loginButtonText}>Login</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
 
-          {/* Register Link */}
-          <TouchableOpacity
-            onPress={() => router.push("/(auth)/register")}
-            style={styles.registerLink}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.registerLinkText}>
-              Don't have an account? <Text style={styles.registerLinkBold}>Register here</Text>
-            </Text>
-          </TouchableOpacity>
-        </View>
+              {/* Register Link */}
+              <TouchableOpacity
+                onPress={() => router.push("/(auth)/register")}
+                style={styles.registerLink}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.registerLinkText}>
+                  Don't have an account? <Text style={styles.registerLinkBold}>Register here</Text>
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </Formik>
       </ScrollView>
 
       {/* Custom Alert */}
@@ -337,6 +364,12 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     paddingHorizontal: 20,
   },
+  logo: {
+    width: 150,
+    height: 150,
+    marginBottom: 20,
+    borderRadius: 150,
+  },
   title: {
     fontSize: 36,
     fontWeight: "700",
@@ -383,6 +416,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: "#FFFFFF",
+    fontWeight: "500",
+  },
+  inputWrapper: {
+    marginBottom: 16,
+  },
+  inputContainerError: {
+    borderColor: "#FF3B30",
+  },
+  errorText: {
+    color: "#FF3B30",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 16,
     fontWeight: "500",
   },
   loginButton: {
