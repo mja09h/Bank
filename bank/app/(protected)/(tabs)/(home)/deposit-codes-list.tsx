@@ -10,7 +10,10 @@ import {
 import React, { useState, useEffect, useRef } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { getDepositCodes, DepositCode } from "../../../../api/storage";
+import { getDepositCodes, updateDepositCode, DepositCode } from "../../../../api/depositCodes";
+import { getUser } from "../../../../api/auth";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import CustomAlert from "../../../../components/CustomAlert";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -18,6 +21,16 @@ const DepositCodesList = () => {
   const router = useRouter();
   const [codes, setCodes] = useState<DepositCode[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState<"success" | "error" | "info" | "warning">("info");
+  const [alertButtons, setAlertButtons] = useState<Array<{ text: string; onPress?: () => void; style?: "default" | "cancel" | "destructive" }>>([]);
+
+  const { data: user } = useQuery({
+    queryKey: ["user"],
+    queryFn: () => getUser(),
+  });
 
   // Generate star positions
   const stars = useRef(
@@ -83,28 +96,32 @@ const DepositCodesList = () => {
     Animated.parallel(moonAnimationsArray).start();
   }, []);
 
-  useEffect(() => {
-    loadCodes();
-  }, []);
+  const queryClient = useQueryClient();
+  const userId = user?.id || user?._id || user?.username;
 
-  const loadCodes = async () => {
-    setLoading(true);
-    const allCodes = await getDepositCodes();
-    // Check expiry and update status
-    const now = new Date();
-    const updatedCodes = allCodes.map((code) => {
-      const expiryDate = new Date(code.expiryDate);
-      if (expiryDate < now && code.status === "pending") {
-        return { ...code, status: "expired" as const };
-      }
-      return code;
-    });
-    // Sort by newest first
-    updatedCodes.sort((a, b) => {
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-    setCodes(updatedCodes);
-    setLoading(false);
+  const { data: codesData, isLoading, refetch } = useQuery({
+    queryKey: ["depositCodes", userId],
+    queryFn: () => getDepositCodes(userId || ""),
+    enabled: !!userId,
+  });
+
+  useEffect(() => {
+    if (codesData) {
+      // Sort by newest first
+      const sortedCodes = [...codesData].sort((a, b) => {
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      setCodes(sortedCodes);
+      setLoading(false);
+    } else if (isLoading) {
+      setLoading(true);
+    } else {
+      setLoading(false);
+    }
+  }, [codesData, isLoading]);
+
+  const loadCodes = () => {
+    refetch();
   };
 
   const getStatusColor = (status: DepositCode["status"]) => {
@@ -114,6 +131,8 @@ const DepositCodesList = () => {
       case "failed":
         return "#FF3B30";
       case "expired":
+        return "#8E8E93";
+      case "cancelled":
         return "#8E8E93";
       case "pending":
         return "#FF9500";
@@ -130,11 +149,52 @@ const DepositCodesList = () => {
         return "error";
       case "expired":
         return "schedule";
+      case "cancelled":
+        return "cancel";
       case "pending":
         return "pending";
       default:
         return "help";
     }
+  };
+
+  const isCodeCreator = (code: DepositCode) => {
+    if (!user) return false;
+    const userId = user.id || user._id || user.username;
+    return code.userId === userId;
+  };
+
+  const cancelCodeMutation = useMutation({
+    mutationKey: ["cancelDepositCode"],
+    mutationFn: (codeId: string) => updateDepositCode(codeId, "cancelled"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["depositCodes", userId] });
+      setAlertTitle("Code Cancelled");
+      setAlertMessage("Code has been cancelled successfully.");
+      setAlertType("success");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+    },
+    onError: (error: any) => {
+      setAlertTitle("Error");
+      setAlertMessage(error?.response?.data?.error || "Failed to cancel code. Please try again.");
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+    },
+  });
+
+  const handleCancelCode = (code: DepositCode) => {
+    if (code.status !== "pending") {
+      setAlertTitle("Cannot Cancel");
+      setAlertMessage("Only pending codes can be cancelled.");
+      setAlertType("warning");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+      return;
+    }
+
+    cancelCodeMutation.mutate(code.id);
   };
 
   const formatDate = (dateString: string) => {
@@ -285,11 +345,32 @@ const DepositCodesList = () => {
                     <Text style={styles.detailValue}>{formatDate(code.createdAt)}</Text>
                   </View>
                 </View>
+
+                {/* Cancel Button - Only show for pending codes created by current user */}
+                {isCodeCreator(code) && code.status === "pending" && (
+                  <TouchableOpacity
+                    style={styles.cancelButton}
+                    onPress={() => handleCancelCode(code)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="cancel" size={18} color="#FFFFFF" />
+                    <Text style={styles.cancelButtonText}>Cancel Code</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
           </View>
         )}
       </ScrollView>
+
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        buttons={alertButtons}
+        onDismiss={() => setAlertVisible(false)}
+      />
     </View>
   );
 };
@@ -458,6 +539,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#FFFFFF",
     fontWeight: "600",
+  },
+  cancelButton: {
+    backgroundColor: "#FF3B30",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+  cancelButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
 });
 

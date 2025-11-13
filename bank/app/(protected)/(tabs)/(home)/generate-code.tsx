@@ -7,15 +7,17 @@ import {
   TouchableOpacity,
   Animated,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import React, { useState, useEffect, useRef } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { storeDepositCode, DepositCode } from "../../../../api/storage";
+import { createDepositCode, DepositCode } from "../../../../api/depositCodes";
 import { getUser } from "../../../../api/auth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import CustomAlert from "../../../../components/CustomAlert";
 import * as Clipboard from "expo-clipboard";
+import { getToken } from "../../../../api/storage";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -100,10 +102,27 @@ const GenerateCode = () => {
     Animated.parallel(moonAnimationsArray).start();
   }, []);
 
-  const generateCode = () => {
-    // Generate a random 6-digit code
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  };
+  const { mutate: createCodeMutation, isPending } = useMutation({
+    mutationKey: ["createDepositCode"],
+    mutationFn: (data: { userId: string; amount: number; type: 'get' | 'send'; expiryDays: number; creatorToken?: string }) =>
+      createDepositCode(data),
+    onSuccess: (data) => {
+      setGeneratedCode(data.code);
+      Clipboard.setStringAsync(data.code);
+      setAlertTitle("Code Generated");
+      setAlertMessage(`Your deposit code ${data.code} has been generated and copied to clipboard!`);
+      setAlertType("success");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+    },
+    onError: (error: any) => {
+      setAlertTitle("Error");
+      setAlertMessage(error?.response?.data?.error || "Failed to generate code. Please try again.");
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+    },
+  });
 
   const handleGenerate = async () => {
     if (!amount || amount.trim() === "") {
@@ -135,33 +154,42 @@ const GenerateCode = () => {
       return;
     }
 
-    const code = generateCode();
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + days);
+    const userId = user?.id || user?._id || user?.username;
+    if (!userId) {
+      setAlertTitle("Error");
+      setAlertMessage("User information not available. Please try again.");
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+      return;
+    }
 
-    const depositCode: DepositCode = {
-      id: Date.now().toString(),
-      code,
+    // For "send" type codes, we need to store the creator's token
+    let creatorToken = undefined;
+    if (type === "send") {
+      creatorToken = await getToken();
+      console.log("Retrieved token for send code:", creatorToken ? `${creatorToken.substring(0, 20)}...` : "null");
+      if (!creatorToken) {
+        setAlertTitle("Error");
+        setAlertMessage("Authentication token not available. Please login again.");
+        setAlertType("error");
+        setAlertButtons([{ text: "OK" }]);
+        setAlertVisible(true);
+        return;
+      }
+    }
+
+    const mutationData = {
+      userId,
       amount: numAmount,
       type,
-      expiryDate: expiryDate.toISOString(),
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      userId: user?.id || user?._id || user?.username,
-      recipientId: user?.username, // Store creator's username for transfers
+      expiryDays: days,
+      ...(creatorToken && { creatorToken }), // Only include if token exists
     };
+    
+    console.log("Creating code with data:", { ...mutationData, creatorToken: creatorToken ? `${creatorToken.substring(0, 20)}...` : "none" });
 
-    await storeDepositCode(depositCode);
-    setGeneratedCode(code);
-    
-    // Copy to clipboard
-    Clipboard.setStringAsync(code);
-    
-    setAlertTitle("Code Generated");
-    setAlertMessage(`Your deposit code ${code} has been generated and copied to clipboard!`);
-    setAlertType("success");
-    setAlertButtons([{ text: "OK" }]);
-    setAlertVisible(true);
+    createCodeMutation(mutationData);
   };
 
   return (
@@ -308,12 +336,19 @@ const GenerateCode = () => {
 
           {/* Generate Button */}
           <TouchableOpacity
-            style={styles.generateButton}
+            style={[styles.generateButton, isPending && styles.generateButtonDisabled]}
             onPress={handleGenerate}
+            disabled={isPending}
             activeOpacity={0.8}
           >
-            <MaterialIcons name="qr-code-2" size={20} color="#FFFFFF" />
-            <Text style={styles.generateButtonText}>Generate Code</Text>
+            {isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MaterialIcons name="qr-code-2" size={20} color="#FFFFFF" />
+                <Text style={styles.generateButtonText}>Generate Code</Text>
+              </>
+            )}
           </TouchableOpacity>
 
           {/* Generated Code Display */}
@@ -484,6 +519,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     marginTop: 8,
+  },
+  generateButtonDisabled: {
+    opacity: 0.6,
   },
   generateButtonText: {
     color: "#FFFFFF",

@@ -558,8 +558,7 @@ const styles = StyleSheet.create({
     padding: 16,
     backgroundColor: "#1A1F3A", // Dark card background
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "#007AFF",
+    borderWidth: 0,
     shadowColor: "#007AFF",
     shadowOffset: {
       width: 0,

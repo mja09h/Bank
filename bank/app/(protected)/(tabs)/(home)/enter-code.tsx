@@ -12,7 +12,7 @@ import {
 import React, { useState, useEffect, useRef } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { getDepositCodes, updateDepositCode, DepositCode } from "../../../../api/storage";
+import { getDepositCodeByCode, useDepositCode, DepositCode } from "../../../../api/depositCodes";
 import { getUser } from "../../../../api/auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { transfer } from "../../../../api/transactions";
@@ -41,30 +41,20 @@ const EnterCode = () => {
     mutationFn: ({ amount, username }: { amount: number; username: string }) =>
       transfer(amount, username),
     onSuccess: async () => {
-      if (foundCode) {
-        await updateDepositCode(foundCode.id, { status: "success" });
-      }
+      // Transfer successful - now mark the code as used
       queryClient.invalidateQueries({ queryKey: ["user"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      setAlertTitle("Payment Successful");
-      setAlertMessage(`Successfully transferred ${foundCode?.amount || 0} KD!`);
-      setAlertType("success");
-      setAlertButtons([
-        {
-          text: "OK",
-          onPress: () => {
-            setAlertVisible(false);
-            setCode("");
-            setFoundCode(null);
-          },
-        },
-      ]);
-      setAlertVisible(true);
+      
+      // Mark code as used in backend
+      if (foundCode) {
+        const userId = user?.id || user?._id || user?.username;
+        if (userId) {
+          useCodeMutation.mutate({ code: foundCode.code, userId });
+        }
+      }
     },
     onError: async (error: any) => {
-      if (foundCode) {
-        await updateDepositCode(foundCode.id, { status: "failed" });
-      }
+      // Transfer failed - don't mark code as used
       setAlertTitle("Payment Failed");
       setAlertMessage(error?.response?.data?.message || "Failed to complete payment. Please try again.");
       setAlertType("error");
@@ -137,7 +127,38 @@ const EnterCode = () => {
     Animated.parallel(moonAnimationsArray).start();
   }, []);
 
-  const handleSearch = async () => {
+  const searchCodeMutation = useMutation({
+    mutationKey: ["searchDepositCode"],
+    mutationFn: (code: string) => getDepositCodeByCode(code),
+    onSuccess: (matchedCode) => {
+      // Check status
+      if (matchedCode.status !== "pending") {
+        const statusMessage = matchedCode.status === "cancelled" 
+          ? "This code has been cancelled by the creator."
+          : `This code is ${matchedCode.status.toUpperCase()}.`;
+        setAlertTitle("Code Not Available");
+        setAlertMessage(statusMessage);
+        setAlertType("warning");
+        setAlertButtons([{ text: "OK" }]);
+        setAlertVisible(true);
+        setFoundCode(null);
+        return;
+      }
+
+      setFoundCode(matchedCode);
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || "Code not found. Please check and try again.";
+      setAlertTitle("Code Not Found");
+      setAlertMessage(errorMessage);
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+      setFoundCode(null);
+    },
+  });
+
+  const handleSearch = () => {
     if (!code || code.trim() === "") {
       setAlertTitle("Missing Code");
       setAlertMessage("Please enter a deposit code.");
@@ -147,43 +168,95 @@ const EnterCode = () => {
       return;
     }
 
-    const allCodes = await getDepositCodes();
-    const matchedCode = allCodes.find((c) => c.code === code.trim());
+    const searchCode = code.trim();
+    searchCodeMutation.mutate(searchCode);
+  };
 
-    if (!matchedCode) {
-      setAlertTitle("Code Not Found");
-      setAlertMessage("The code you entered does not exist.");
+  const useCodeMutation = useMutation({
+    mutationKey: ["useDepositCode"],
+    mutationFn: ({ code, userId, recipientUsername }: { code: string; userId: string; recipientUsername?: string }) => 
+      useDepositCode(code, userId, recipientUsername),
+    onSuccess: (data) => {
+      console.log("✅ Use Code Response:", JSON.stringify(data, null, 2));
+      
+      // Check if transfer was successful (for "send" type codes)
+      if (foundCode && foundCode.type === "send") {
+        // Check transferSuccess - it could be true, "true", or the response might indicate success differently
+        const transferSuccess = data.transferSuccess === true || data.transferSuccess === "true" || 
+                                (data.transferSuccess !== false && data.transferSuccess !== "false" && 
+                                 !data.transferError && data.code?.status === "success");
+        
+        console.log("Transfer Success Check:", {
+          transferSuccess: data.transferSuccess,
+          transferError: data.transferError,
+          codeStatus: data.code?.status,
+          finalResult: transferSuccess
+        });
+        
+        if (transferSuccess) {
+          // Transfer successful - refresh user data to see updated balance
+          queryClient.invalidateQueries({ queryKey: ["user"] });
+          queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          
+          setAlertTitle("Payment Successful");
+          setAlertMessage(`Successfully received ${foundCode.amount} KD using code ${foundCode.code}! Your balance has been updated.`);
+          setAlertType("success");
+        } else {
+          setAlertTitle("Transfer Failed");
+          setAlertMessage(data.transferError || "The transfer could not be completed. Please contact support.");
+          setAlertType("error");
+        }
+        setAlertButtons([
+          {
+            text: "OK",
+            onPress: () => {
+              setAlertVisible(false);
+              setCode("");
+              setFoundCode(null);
+            },
+          },
+        ]);
+        setAlertVisible(true);
+      } else {
+        // For "get" type codes, transfer was already handled
+        setAlertTitle("Payment Successful");
+        setAlertMessage(`Successfully transferred ${foundCode?.amount || 0} KD using code ${foundCode?.code}!`);
+        setAlertType("success");
+        setAlertButtons([
+          {
+            text: "OK",
+            onPress: () => {
+              setAlertVisible(false);
+              setCode("");
+              setFoundCode(null);
+            },
+          },
+        ]);
+        setAlertVisible(true);
+      }
+    },
+    onError: (error: any) => {
+      const errorMessage = error?.response?.data?.error || "Failed to mark code as used. Please try again.";
+      setAlertTitle("Error");
+      setAlertMessage(errorMessage);
       setAlertType("error");
       setAlertButtons([{ text: "OK" }]);
       setAlertVisible(true);
-      setFoundCode(null);
-      return;
-    }
-
-    // Check if expired
-    const expiryDate = new Date(matchedCode.expiryDate);
-    const now = new Date();
-    if (expiryDate < now && matchedCode.status === "pending") {
-      await updateDepositCode(matchedCode.id, { status: "expired" });
-      matchedCode.status = "expired";
-    }
-
-    // Check status
-    if (matchedCode.status !== "pending") {
-      setAlertTitle("Code Not Available");
-      setAlertMessage(`This code is ${matchedCode.status.toUpperCase()}.`);
-      setAlertType("warning");
-      setAlertButtons([{ text: "OK" }]);
-      setAlertVisible(true);
-      setFoundCode(null);
-      return;
-    }
-
-    setFoundCode(matchedCode);
-  };
+    },
+  });
 
   const handlePay = () => {
     if (!foundCode || !user) return;
+
+    const userId = user.id || user._id || user.username;
+    if (!userId) {
+      setAlertTitle("Error");
+      setAlertMessage("User information not available. Please try again.");
+      setAlertType("error");
+      setAlertButtons([{ text: "OK" }]);
+      setAlertVisible(true);
+      return;
+    }
 
     if (!foundCode.recipientId) {
       setAlertTitle("Error");
@@ -197,23 +270,34 @@ const EnterCode = () => {
     // If code type is "get", the code creator wants to receive money
     // So current user sends money to the code creator
     // If code type is "send", the code creator wants to send money
-    // So current user receives money (but we can't do that via transfer API)
+    // So code creator sends money to current user (via backend)
     
     if (foundCode.type === "get") {
-      // Current user sends money to code creator
+      // Process transfer FIRST, then mark code as used
+      // This ensures the money is transferred before marking the code as used
       transferMutation({
         amount: foundCode.amount,
         username: foundCode.recipientId,
       });
     } else {
-      // For "send" type, the code creator should send money to current user
-      // But we can't initiate a transfer from another user's account
-      // This would require the code creator to complete the action
-      setAlertTitle("Code Type: Send");
-      setAlertMessage("This code is for sending money. The code creator needs to complete the transfer.");
-      setAlertType("info");
-      setAlertButtons([{ text: "OK" }]);
-      setAlertVisible(true);
+      // For "send" type, the code creator sends money to current user
+      // First mark the code as used, then the backend will return transfer info
+      const currentUsername = user?.username;
+      if (!currentUsername) {
+        setAlertTitle("Error");
+        setAlertMessage("User information not available. Please try again.");
+        setAlertType("error");
+        setAlertButtons([{ text: "OK" }]);
+        setAlertVisible(true);
+        return;
+      }
+      
+      // Use the code - backend will return transfer info for "send" type codes
+      useCodeMutation.mutate({ 
+        code: foundCode.code, 
+        userId,
+        recipientUsername: currentUsername 
+      });
     }
   };
 
@@ -306,13 +390,21 @@ const EnterCode = () => {
             />
           </View>
           <TouchableOpacity
-            style={styles.searchButton}
+            style={[styles.searchButton, searchCodeMutation.isPending && styles.searchButtonDisabled]}
             onPress={handleSearch}
+            disabled={searchCodeMutation.isPending}
             activeOpacity={0.8}
           >
-            <MaterialIcons name="search" size={20} color="#FFFFFF" />
-            <Text style={styles.searchButtonText}>Search Code</Text>
+            {searchCodeMutation.isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <>
+                <MaterialIcons name="search" size={20} color="#FFFFFF" />
+                <Text style={styles.searchButtonText}>Search Code</Text>
+              </>
+            )}
           </TouchableOpacity>
+          
         </View>
 
         {/* Code Details */}
@@ -491,6 +583,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
   },
+  searchButtonDisabled: {
+    opacity: 0.6,
+  },
   searchButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
@@ -551,6 +646,18 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     letterSpacing: 0.5,
+  },
+  debugButton: {
+    backgroundColor: "#8E8E93",
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 12,
+    alignItems: "center",
+  },
+  debugButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
 

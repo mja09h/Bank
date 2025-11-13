@@ -32,7 +32,7 @@ export interface DepositCode {
     amount: number;
     type: 'get' | 'send'; // 'get' = to receive, 'send' = to send
     expiryDate: string;
-    status: 'pending' | 'success' | 'failed' | 'expired';
+    status: 'pending' | 'success' | 'failed' | 'expired' | 'cancelled';
     createdAt: string;
     userId?: string;
     recipientId?: string;
@@ -43,8 +43,14 @@ const DEPOSIT_CODES_KEY = 'deposit_codes';
 const storeDepositCode = async (code: DepositCode) => {
     try {
         const codes = await getDepositCodes();
+        console.log('Current codes before adding:', codes);
         codes.push(code);
+        console.log('Codes after adding:', codes);
         await AsyncStorage.setItem(DEPOSIT_CODES_KEY, JSON.stringify(codes));
+        console.log('Code stored successfully:', code.code);
+        // Verify storage
+        const verify = await AsyncStorage.getItem(DEPOSIT_CODES_KEY);
+        console.log('Verification - stored data:', verify);
     } catch (error) {
         console.error('Error storing deposit code:', error);
     }
